@@ -990,70 +990,138 @@
     /**
      * 選択中の予定を削除します。
      */
-    deleteSelectedSchedule() {
-      const schedule =
-        this.getSelectedSchedule();
+    /**
+ * 選択中の予定をGASから削除します。
+ *
+ * 削除成功後はGASから予定一覧を再取得し、
+ * カレンダーと今日の予定を最新状態へ更新します。
+ *
+ * @returns {Promise<void>}
+ */
+async deleteSelectedSchedule() {
+  if (this.isDeletingSchedule) {
+    return;
+  }
 
-      if (!schedule) {
-        return;
-      }
+  const schedule =
+    this.getSelectedSchedule();
 
-      const confirmed =
-        window.confirm(
-          `「${schedule.title}」を削除します。\nこの操作は元に戻せません。`
-        );
+  if (!schedule) {
+    return;
+  }
 
-      if (!confirmed) {
-        return;
-      }
+  const confirmed =
+    window.confirm(
+      `「${schedule.title}」を削除します。\n\n` +
+      'この操作は元に戻せません。'
+    );
 
-      try {
-        const deleted =
-          window.NinjaState.deleteSchedule(
-            schedule.id
-          );
+  if (!confirmed) {
+    return;
+  }
 
-        if (!deleted) {
-          throw new Error(
-            '削除対象の予定が見つかりません。'
-          );
-        }
+  if (
+    !window.NinjaApi ||
+    typeof window.NinjaApi.deleteSchedule !==
+      'function'
+  ) {
+    this.showApplicationStatus(
+      'error',
+      '削除機能を読み込めませんでした。'
+    );
 
-        this.closeScheduleDetail();
-        this.selectedScheduleId = '';
+    return;
+  }
 
-        if (
-          window.NinjaApp &&
-          typeof window.NinjaApp.renderApplication ===
-            'function'
-        ) {
-          window.NinjaApp.renderApplication();
-        } else if (
-          window.NinjaCalendar &&
-          typeof window.NinjaCalendar.render ===
-            'function'
-        ) {
-          window.NinjaCalendar.render();
-        }
+  if (
+    !window.NinjaState ||
+    typeof window.NinjaState.refreshFromApi !==
+      'function'
+  ) {
+    this.showApplicationStatus(
+      'error',
+      '予定データの再取得機能を読み込めませんでした。'
+    );
 
-        this.showApplicationStatus(
-          'success',
-          '予定を削除しました。'
-        );
-      } catch (error) {
-        console.error(
-          '予定の削除に失敗しました。',
-          error
-        );
+    return;
+  }
 
-        this.showApplicationStatus(
-          'error',
-          error instanceof Error
-            ? error.message
-            : '予定を削除できませんでした。'
-        );
-      }
-    },
+  this.isDeletingSchedule = true;
+
+  const originalButtonText =
+    this.elements.deleteScheduleButton.textContent;
+
+  this.elements.deleteScheduleButton.disabled =
+    true;
+
+  this.elements.editScheduleButton.disabled =
+    true;
+
+  this.elements.copyScheduleButton.disabled =
+    true;
+
+  this.elements.deleteScheduleButton.textContent =
+    '削除中...';
+
+  try {
+    await window.NinjaApi.deleteSchedule(
+      schedule.id
+    );
+
+    this.closeScheduleDetail();
+
+    this.selectedScheduleId = '';
+
+    await window.NinjaState.refreshFromApi({
+      silent: false,
+    });
+
+    if (
+      window.NinjaApp &&
+      typeof window.NinjaApp.renderApplication ===
+        'function'
+    ) {
+      window.NinjaApp.renderApplication();
+    } else if (
+      window.NinjaCalendar &&
+      typeof window.NinjaCalendar.render ===
+        'function'
+    ) {
+      window.NinjaCalendar.render();
+    }
+
+    this.showApplicationStatus(
+      'success',
+      '予定を削除しました。'
+    );
+  } catch (error) {
+    console.error(
+      '予定の削除に失敗しました。',
+      error
+    );
+
+    this.showApplicationStatus(
+      'error',
+      error instanceof Error
+        ? error.message
+        : '予定を削除できませんでした。'
+    );
+  } finally {
+    this.isDeletingSchedule = false;
+
+    this.elements.deleteScheduleButton.disabled =
+      false;
+
+    this.elements.editScheduleButton.disabled =
+      false;
+
+    this.elements.copyScheduleButton.disabled =
+      false;
+
+    this.elements.deleteScheduleButton.textContent =
+      originalButtonText || '削除';
+  }
+},
 
     /**
      * 選択中の予定を取得します。
