@@ -5,6 +5,9 @@
  * app.js
  *
  * アプリ全体の制御と予定保存処理を管理します。
+ *
+ * 予定の新規登録・更新はGoogle Apps Script APIへ送信し、
+ * 保存後にAPIから予定一覧を再取得します。
  */
 
 (function () {
@@ -18,6 +21,7 @@
     },
 
     isSubmitting: false,
+    statusTimerId: null,
 
     /**
      * アプリを初期化します。
@@ -66,18 +70,18 @@
     },
 
     /**
-     * 必須要素と機能を確認します。
+     * 必須要素と必要機能を確認します。
      *
      * @returns {boolean}
      */
     validateRequiredElements() {
-      const hasElements =
+      const hasRequiredElements =
         Boolean(
           this.elements.scheduleForm &&
           this.elements.saveScheduleButton
         );
 
-      if (!hasElements) {
+      if (!hasRequiredElements) {
         console.error(
           'アプリ初期化に必要なHTML要素が見つかりません。'
         );
@@ -86,12 +90,36 @@
       }
 
       if (
+        !window.NinjaApi ||
+        typeof window.NinjaApi
+          .createSchedule !== 'function' ||
+        typeof window.NinjaApi
+          .updateSchedule !== 'function'
+      ) {
+        console.error(
+          'API通信機能が読み込まれていません。'
+        );
+
+        this.showApplicationStatus(
+          'error',
+          'API通信機能を読み込めませんでした。'
+        );
+
+        return false;
+      }
+
+      if (
         !window.NinjaState ||
         typeof window.NinjaState
-          .saveSchedule !== 'function'
+          .refreshFromApi !== 'function'
       ) {
         console.error(
           '予定データ管理機能が読み込まれていません。'
+        );
+
+        this.showApplicationStatus(
+          'error',
+          '予定データ管理機能を読み込めませんでした。'
         );
 
         return false;
@@ -126,21 +154,29 @@
       );
 
       window.addEventListener(
-        'storage',
+        'ninja:schedules-updated',
+        () => {
+          this.renderApplication();
+        }
+      );
+
+      window.addEventListener(
+        'ninja:schedules-load-error',
         (event) => {
-          if (
-            event.key ===
-            'ninja-schedule-coach-schedules-v1'
-          ) {
-            window.NinjaState.init();
-            this.renderApplication();
-          }
+          const message =
+            event.detail?.error?.message ||
+            '予定の取得に失敗しました。';
+
+          this.showApplicationStatus(
+            'error',
+            message
+          );
         }
       );
     },
 
     /**
-     * 予定フォームを保存します。
+     * 予定フォームの送信を処理します。
      */
     async handleScheduleSubmit() {
       if (this.isSubmitting) {
@@ -183,35 +219,60 @@
             validationResult.data
           );
 
-        const saveResult =
-          window.NinjaState.saveSchedule(
-            scheduleData
-          );
+        const isUpdate =
+          Boolean(scheduleData.id);
+
+        if (isUpdate) {
+          await window.NinjaApi
+            .updateSchedule(
+              scheduleData.id,
+              scheduleData
+            );
+        } else {
+          const createData = {
+            ...scheduleData,
+          };
+
+          delete createData.id;
+
+          await window.NinjaApi
+            .createSchedule(
+              createData
+            );
+        }
+
+        await window.NinjaState
+          .refreshFromApi({
+            silent: false,
+          });
 
         this.renderApplication();
 
         const successMessage =
-          saveResult.action === 'updated'
+          isUpdate
             ? '予定を更新しました。'
             : '予定を保存しました。';
+
+        this.closeScheduleDialogAfterSave();
 
         this.showApplicationStatus(
           'success',
           successMessage
         );
-
-        this.closeScheduleDialogAfterSave();
       } catch (error) {
         console.error(
           '予定の保存に失敗しました。',
           error
         );
 
-        this.showFormStatus(
-          'error',
+        const message =
           error instanceof Error
             ? error.message
-            : '予定を保存できませんでした。'
+            : '予定を保存できませんでした。';
+
+        this.showFormStatus(
+          'error',
+          message
         );
       } finally {
         this.setSubmittingState(false);
@@ -219,79 +280,116 @@
     },
 
     /**
-     * 保存用データを整形します。
+     * APIへ送信する予定データを整形します。
      *
      * @param {Object} formData
      * @returns {Object}
      */
     prepareScheduleData(formData) {
+      const isAllDay =
+        Boolean(formData.allDay);
+
       return {
         id:
-          formData.id || '',
+          this.normalizeText(
+            formData.id
+          ),
 
         scheduleType:
-          formData.scheduleType,
+          this.normalizeText(
+            formData.scheduleType
+          ),
 
         categories:
           Array.isArray(
             formData.categories
           )
-            ? [...formData.categories]
+            ? [
+                ...new Set(
+                  formData.categories
+                    .map((category) =>
+                      this.normalizeText(
+                        category
+                      )
+                    )
+                    .filter(Boolean)
+                ),
+              ]
             : [],
 
         title:
-          formData.title,
+          this.normalizeText(
+            formData.title
+          ),
 
         date:
-          formData.date,
+          this.normalizeText(
+            formData.date
+          ),
 
         allDay:
-          Boolean(formData.allDay),
+          isAllDay,
 
         startTime:
-          formData.allDay
+          isAllDay
             ? ''
-            : formData.startTime || '',
+            : this.normalizeText(
+                formData.startTime
+              ),
 
         endTime:
-          formData.allDay
+          isAllDay
             ? ''
-            : formData.endTime || '',
+            : this.normalizeText(
+                formData.endTime
+              ),
 
         meetingTime:
-          formData.allDay
+          isAllDay
             ? ''
-            : formData.meetingTime || '',
+            : this.normalizeText(
+                formData.meetingTime
+              ),
 
         location:
-          formData.location || '',
+          this.normalizeText(
+            formData.location
+          ),
 
         mapUrl:
-          formData.mapUrl || '',
+          this.normalizeText(
+            formData.mapUrl
+          ),
 
         attendanceDeadline:
-          formData.attendanceDeadline || '',
+          this.normalizeText(
+            formData.attendanceDeadline
+          ),
 
         belongings:
-          formData.belongings || '',
+          this.normalizeText(
+            formData.belongings
+          ),
 
         description:
-          formData.description || '',
+          this.normalizeText(
+            formData.description
+          ),
 
         coachNote:
-          formData.coachNote || '',
+          this.normalizeText(
+            formData.coachNote
+          ),
 
         status:
-          formData.status || 'draft',
+          this.normalizeText(
+            formData.status
+          ) || 'draft',
       };
     },
 
     /**
-     * 男子全体・女子全体の選択状態を調整します。
-     *
-     * 男子全体を選択した場合は男子U13〜U15を解除します。
-     * 男子U13〜U15を選択した場合は男子全体を解除します。
-     * 女子も同じルールです。
+     * 男子全体・女子全体と各年代の選択を整理します。
      *
      * @param {HTMLInputElement} changedInput
      */
@@ -302,10 +400,7 @@
         return;
       }
 
-      const value =
-        changedInput.value;
-
-      const groups = {
+      const categoryGroups = {
         'boys-all': [
           'boys-u13',
           'boys-u14',
@@ -319,23 +414,37 @@
         ],
       };
 
-      if (groups[value]) {
+      if (
+        categoryGroups[
+          changedInput.value
+        ]
+      ) {
         this.setCategoryCheckedState(
-          groups[value],
+          categoryGroups[
+            changedInput.value
+          ],
           false
         );
 
         return;
       }
 
-      if (value.startsWith('boys-u')) {
+      if (
+        changedInput.value.startsWith(
+          'boys-u'
+        )
+      ) {
         this.setCategoryCheckedState(
           ['boys-all'],
           false
         );
       }
 
-      if (value.startsWith('girls-u')) {
+      if (
+        changedInput.value.startsWith(
+          'girls-u'
+        )
+      ) {
         this.setCategoryCheckedState(
           ['girls-all'],
           false
@@ -344,7 +453,7 @@
     },
 
     /**
-     * 指定カテゴリーのチェック状態を変更します。
+     * 指定カテゴリーの選択状態を変更します。
      *
      * @param {string[]} categoryValues
      * @param {boolean} checked
@@ -360,7 +469,8 @@
               input.value
             )
           ) {
-            input.checked = checked;
+            input.checked =
+              checked;
           }
         }
       );
@@ -390,7 +500,10 @@
           'today-schedule-list'
         );
 
-      if (!container) {
+      if (
+        !container ||
+        !window.NinjaState
+      ) {
         return;
       }
 
@@ -414,7 +527,9 @@
 
       if (schedules.length === 0) {
         const message =
-          document.createElement('p');
+          document.createElement(
+            'p'
+          );
 
         message.className =
           'empty-message';
@@ -531,13 +646,15 @@
 
       card.appendChild(mark);
       card.appendChild(content);
-      card.appendChild(actionButton);
+      card.appendChild(
+        actionButton
+      );
 
       return card;
     },
 
     /**
-     * 予定カードの補足情報を作成します。
+     * 今日の予定の補足情報を作成します。
      *
      * @param {Object} schedule
      * @returns {string}
@@ -549,13 +666,14 @@
 
       if (schedule.allDay) {
         parts.push('終日');
-      } else if (schedule.startTime) {
-        const timeText =
+      } else if (
+        schedule.startTime
+      ) {
+        parts.push(
           schedule.endTime
             ? `${schedule.startTime}〜${schedule.endTime}`
-            : schedule.startTime;
-
-        parts.push(timeText);
+            : `${schedule.startTime}開始`
+        );
       }
 
       if (schedule.location) {
@@ -570,9 +688,7 @@
     },
 
     /**
-     * 予定詳細画面を開きます。
-     *
-     * 現在のui.jsに詳細機能があれば利用します。
+     * 予定詳細を開きます。
      *
      * @param {string} scheduleId
      */
@@ -589,53 +705,39 @@
           .openScheduleDetail(
             scheduleId
           );
-
-        return;
       }
-
-      console.log(
-        '予定詳細:',
-        window.NinjaState
-          .getScheduleById(
-            scheduleId
-          )
-      );
     },
 
     /**
-     * 保存後に予定フォームを閉じます。
+     * 保存後に予定フォームを閉じて初期化します。
      */
     closeScheduleDialogAfterSave() {
-      window.setTimeout(
-        () => {
-          if (
-            window.NinjaUI &&
-            typeof window.NinjaUI
-              .closeScheduleDialog ===
-              'function'
-          ) {
-            window.NinjaUI
-              .closeScheduleDialog();
-          }
+      if (
+        window.NinjaUI &&
+        typeof window.NinjaUI
+          .closeScheduleDialog ===
+          'function'
+      ) {
+        window.NinjaUI
+          .closeScheduleDialog();
+      }
 
-          this.elements.scheduleForm.reset();
+      this.elements.scheduleForm
+        .reset();
 
-          if (
-            window.NinjaUI &&
-            typeof window.NinjaUI
-              .initializeFormState ===
-              'function'
-          ) {
-            window.NinjaUI
-              .initializeFormState();
-          }
-        },
-        350
-      );
+      if (
+        window.NinjaUI &&
+        typeof window.NinjaUI
+          .initializeFormState ===
+          'function'
+      ) {
+        window.NinjaUI
+          .initializeFormState();
+      }
     },
 
     /**
-     * 送信中の状態を切り替えます。
+     * 保存中の状態を切り替えます。
      *
      * @param {boolean} isSubmitting
      */
@@ -653,14 +755,15 @@
           ? '保存中...'
           : '予定を保存';
 
-      this.elements.scheduleForm.setAttribute(
-        'aria-busy',
-        String(isSubmitting)
-      );
+      this.elements.scheduleForm
+        .setAttribute(
+          'aria-busy',
+          String(isSubmitting)
+        );
     },
 
     /**
-     * フォーム内メッセージを表示します。
+     * フォーム内へメッセージを表示します。
      *
      * @param {'success'|'warning'|'error'|'info'} status
      * @param {string} message
@@ -692,7 +795,7 @@
     },
 
     /**
-     * 画面上部へメッセージを表示します。
+     * 画面上部へ状態メッセージを表示します。
      *
      * @param {'success'|'warning'|'error'|'info'} status
      * @param {string} message
@@ -708,21 +811,34 @@
         return;
       }
 
-      this.elements.statusPanel.dataset.status =
-        status;
+      if (this.statusTimerId) {
+        window.clearTimeout(
+          this.statusTimerId
+        );
 
-      this.elements.statusMessage.textContent =
-        message;
+        this.statusTimerId =
+          null;
+      }
 
-      this.elements.statusPanel.hidden =
-        false;
+      this.elements.statusPanel
+        .dataset.status =
+          status;
 
-      window.setTimeout(
-        () => {
-          this.hideApplicationStatus();
-        },
-        4000
-      );
+      this.elements.statusMessage
+        .textContent =
+          message;
+
+      this.elements.statusPanel
+        .hidden =
+          false;
+
+      this.statusTimerId =
+        window.setTimeout(
+          () => {
+            this.hideApplicationStatus();
+          },
+          5000
+        );
     },
 
     /**
@@ -736,16 +852,44 @@
         return;
       }
 
-      this.elements.statusPanel.hidden =
-        true;
+      this.elements.statusPanel
+        .hidden =
+          true;
 
       this.elements.statusPanel
         .removeAttribute(
           'data-status'
         );
 
-      this.elements.statusMessage.textContent =
-        '';
+      this.elements.statusMessage
+        .textContent =
+          '';
+
+      if (this.statusTimerId) {
+        window.clearTimeout(
+          this.statusTimerId
+        );
+
+        this.statusTimerId =
+          null;
+      }
+    },
+
+    /**
+     * 文字列を正規化します。
+     *
+     * @param {unknown} value
+     * @returns {string}
+     */
+    normalizeText(value) {
+      if (
+        value === null ||
+        value === undefined
+      ) {
+        return '';
+      }
+
+      return String(value).trim();
     },
 
     /**
@@ -754,9 +898,7 @@
      * @param {Date} date
      * @returns {string}
      */
-    formatDateKey(
-      date
-    ) {
+    formatDateKey(date) {
       const year =
         date.getFullYear();
 
@@ -774,8 +916,7 @@
     },
   };
 
-  window.NinjaApp =
-    App;
+  window.NinjaApp = App;
 
   document.addEventListener(
     'DOMContentLoaded',

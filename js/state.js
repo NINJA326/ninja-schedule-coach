@@ -4,22 +4,27 @@
  * NINJA SCHEDULE
  * state.js
  *
- * 予定データの保存・取得・更新・削除を管理します。
- * 現段階ではlocalStorageを使用します。
+ * 予定データの状態管理を担当します。
+ *
+ * 現在の役割:
+ * - GASから予定一覧を取得
+ * - localStorageへキャッシュ
+ * - GAS取得失敗時はキャッシュを使用
+ * - 予定の追加・更新・削除は現段階ではlocalStorage
  */
 
 (function () {
-  const STORAGE_KEY =
+  const DEFAULT_STORAGE_KEY =
     'ninja-schedule-coach-schedules-v1';
 
-  const SCHEDULE_TYPES = Object.freeze([
+  const VALID_SCHEDULE_TYPES = Object.freeze([
     'practice',
     'game',
     'trip',
     'off',
   ]);
 
-  const CATEGORIES = Object.freeze([
+  const VALID_CATEGORIES = Object.freeze([
     'boys-all',
     'girls-all',
     'boys-u13',
@@ -30,22 +35,171 @@
     'girls-u15',
   ]);
 
-  const STATUSES = Object.freeze([
+  const VALID_STATUSES = Object.freeze([
     'published',
     'draft',
   ]);
 
   const State = {
     schedules: [],
+    initialized: false,
+    loading: false,
+    lastError: null,
+    lastSyncedAt: '',
+    ready: Promise.resolve(),
 
     /**
-     * データ管理を初期化します。
+     * 状態管理を初期化します。
+     *
+     * 最初にキャッシュを表示し、その後GASから最新データを取得します。
+     *
+     * @returns {Promise<Object[]>}
      */
     init() {
-      this.schedules =
-        this.loadSchedules();
+      if (this.loading) {
+        return this.ready;
+      }
 
+      this.schedules = this.loadCachedSchedules();
       this.sortSchedules();
+      this.initialized = true;
+
+      this.ready = this.refreshFromApi({
+        silent: true,
+      });
+
+      return this.ready;
+    },
+
+    /**
+     * GASから予定を再取得します。
+     *
+     * @param {{silent?: boolean}} [options]
+     * @returns {Promise<Object[]>}
+     */
+    async refreshFromApi(options = {}) {
+      if (this.loading) {
+        return this.getSchedules();
+      }
+
+      if (
+        !window.NinjaApi ||
+        typeof window.NinjaApi.getSchedules !== 'function'
+      ) {
+        const error = new Error(
+          'API通信機能が読み込まれていません。'
+        );
+
+        this.lastError = error;
+
+        if (!options.silent) {
+          this.notifyError(error.message);
+        }
+
+        return this.getSchedules();
+      }
+
+      this.loading = true;
+      this.lastError = null;
+
+      this.dispatchStateEvent(
+        'ninja:schedules-loading',
+        {
+          loading: true,
+        }
+      );
+
+      try {
+        const apiData =
+          await window.NinjaApi.getSchedules();
+
+        const remoteSchedules =
+          this.extractSchedulesFromApiData(apiData);
+
+        const normalizedSchedules = [];
+
+        remoteSchedules.forEach((record) => {
+          try {
+            const schedule =
+              this.normalizeSchedule(record);
+
+            this.validateSchedule(schedule);
+
+            normalizedSchedules.push(schedule);
+          } catch (error) {
+            console.warn(
+              'APIから取得した不正な予定を除外しました。',
+              {
+                error,
+                record,
+              }
+            );
+          }
+        });
+
+        this.schedules =
+          this.removeDuplicateSchedules(
+            normalizedSchedules
+          );
+
+        this.sortSchedules();
+        this.persistSchedules();
+
+        this.lastSyncedAt =
+          new Date().toISOString();
+
+        this.renderApplication();
+
+        this.dispatchStateEvent(
+          'ninja:schedules-updated',
+          {
+            source: 'api',
+            schedules:
+              this.getSchedules(),
+            syncedAt:
+              this.lastSyncedAt,
+          }
+        );
+
+        return this.getSchedules();
+      } catch (error) {
+        this.lastError = error;
+
+        console.error(
+          'GASから予定を取得できませんでした。端末内の保存データを表示します。',
+          error
+        );
+
+        if (!options.silent) {
+          this.notifyError(
+            error instanceof Error
+              ? error.message
+              : '予定を取得できませんでした。'
+          );
+        }
+
+        this.renderApplication();
+
+        this.dispatchStateEvent(
+          'ninja:schedules-load-error',
+          {
+            error,
+            schedules:
+              this.getSchedules(),
+          }
+        );
+
+        return this.getSchedules();
+      } finally {
+        this.loading = false;
+
+        this.dispatchStateEvent(
+          'ninja:schedules-loading',
+          {
+            loading: false,
+          }
+        );
+      }
     },
 
     /**
@@ -82,9 +236,7 @@
      */
     getScheduleById(scheduleId) {
       const normalizedId =
-        this.normalizeText(
-          scheduleId
-        );
+        this.normalizeText(scheduleId);
 
       if (!normalizedId) {
         return null;
@@ -140,14 +292,10 @@
       endDate
     ) {
       const normalizedStart =
-        this.normalizeText(
-          startDate
-        );
+        this.normalizeText(startDate);
 
       const normalizedEnd =
-        this.normalizeText(
-          endDate
-        );
+        this.normalizeText(endDate);
 
       if (
         !this.isValidDate(
@@ -155,14 +303,9 @@
         ) ||
         !this.isValidDate(
           normalizedEnd
-        )
-      ) {
-        return [];
-      }
-
-      if (
+        ) ||
         normalizedStart >
-        normalizedEnd
+          normalizedEnd
       ) {
         return [];
       }
@@ -243,9 +386,7 @@
       category
     ) {
       const normalizedCategory =
-        this.normalizeText(
-          category
-        );
+        this.normalizeText(category);
 
       if (
         normalizedCategory ===
@@ -255,7 +396,7 @@
       }
 
       if (
-        !CATEGORIES.includes(
+        !VALID_CATEGORIES.includes(
           normalizedCategory
         )
       ) {
@@ -273,14 +414,14 @@
     },
 
     /**
-     * 新規予定を保存します。
+     * 新規予定を端末内へ保存します。
+     *
+     * GAS保存への切り替えは次のSTEPで行います。
      *
      * @param {Object} scheduleData
      * @returns {Object}
      */
-    createSchedule(
-      scheduleData
-    ) {
+    createSchedule(scheduleData) {
       const now =
         new Date().toISOString();
 
@@ -298,9 +439,7 @@
           updatedAt: now,
         });
 
-      this.validateSchedule(
-        schedule
-      );
+      this.validateSchedule(schedule);
 
       const exists =
         this.schedules.some(
@@ -314,20 +453,15 @@
         );
       }
 
-      this.schedules.push(
-        schedule
-      );
-
+      this.schedules.push(schedule);
       this.sortSchedules();
       this.persistSchedules();
 
-      return this.clone(
-        schedule
-      );
+      return this.clone(schedule);
     },
 
     /**
-     * 予定を更新します。
+     * 予定を端末内で更新します。
      *
      * @param {string} scheduleId
      * @param {Object} scheduleData
@@ -338,9 +472,7 @@
       scheduleData
     ) {
       const normalizedId =
-        this.normalizeText(
-          scheduleId
-        );
+        this.normalizeText(scheduleId);
 
       if (!normalizedId) {
         throw new Error(
@@ -375,9 +507,7 @@
             new Date().toISOString(),
         });
 
-      this.validateSchedule(
-        updated
-      );
+      this.validateSchedule(updated);
 
       this.schedules[index] =
         updated;
@@ -385,9 +515,7 @@
       this.sortSchedules();
       this.persistSchedules();
 
-      return this.clone(
-        updated
-      );
+      return this.clone(updated);
     },
 
     /**
@@ -399,9 +527,7 @@
      *   data: Object
      * }}
      */
-    saveSchedule(
-      scheduleData
-    ) {
+    saveSchedule(scheduleData) {
       const scheduleId =
         this.normalizeText(
           scheduleData?.id
@@ -437,18 +563,14 @@
     },
 
     /**
-     * 予定を削除します。
+     * 予定を端末内から削除します。
      *
      * @param {string} scheduleId
      * @returns {boolean}
      */
-    deleteSchedule(
-      scheduleId
-    ) {
+    deleteSchedule(scheduleId) {
       const normalizedId =
-        this.normalizeText(
-          scheduleId
-        );
+        this.normalizeText(scheduleId);
 
       if (!normalizedId) {
         return false;
@@ -476,7 +598,7 @@
     },
 
     /**
-     * 予定を複写します。
+     * 予定を端末内で複写します。
      *
      * @param {string} scheduleId
      * @param {string} newDate
@@ -498,9 +620,7 @@
       }
 
       const normalizedDate =
-        this.normalizeText(
-          newDate
-        );
+        this.normalizeText(newDate);
 
       if (
         !this.isValidDate(
@@ -512,234 +632,120 @@
         );
       }
 
-      const copiedSchedule = {
+      return this.createSchedule({
         ...source,
         id: '',
-        date:
-          normalizedDate,
+        date: normalizedDate,
         createdAt: '',
         updatedAt: '',
-      };
-
-      return this.createSchedule(
-        copiedSchedule
-      );
+      });
     },
 
     /**
-     * 複数予定を一括複写します。
+     * APIレスポンスから予定配列を抽出します。
      *
-     * @param {string[]} scheduleIds
-     * @param {number} dayOffset
+     * GAS側のレスポンス形式が次のどれでも対応します。
+     * - data: [...]
+     * - data: {schedules: [...]}
+     * - data: {records: [...]}
+     * - data: {items: [...]}
+     *
+     * @param {unknown} apiData
      * @returns {Object[]}
      */
-    copySchedulesByDayOffset(
-      scheduleIds,
-      dayOffset
+    extractSchedulesFromApiData(
+      apiData
     ) {
-      if (
-        !Array.isArray(
-          scheduleIds
-        )
-      ) {
-        throw new Error(
-          '複写対象が正しくありません。'
-        );
+      if (Array.isArray(apiData)) {
+        return apiData;
       }
 
-      const numericOffset =
-        Number(dayOffset);
-
       if (
-        !Number.isInteger(
-          numericOffset
-        )
+        !apiData ||
+        typeof apiData !== 'object'
       ) {
-        throw new Error(
-          '複写日数が正しくありません。'
-        );
-      }
-
-      const copiedSchedules = [];
-
-      scheduleIds.forEach(
-        (scheduleId) => {
-          const source =
-            this.getScheduleById(
-              scheduleId
-            );
-
-          if (!source) {
-            return;
-          }
-
-          const sourceDate =
-            this.parseDate(
-              source.date
-            );
-
-          sourceDate.setDate(
-            sourceDate.getDate() +
-              numericOffset
-          );
-
-          const newDate =
-            this.formatDate(
-              sourceDate
-            );
-
-          copiedSchedules.push(
-            this.copySchedule(
-              source.id,
-              newDate
-            )
-          );
-        }
-      );
-
-      return copiedSchedules;
-    },
-
-    /**
-     * すべての予定を削除します。
-     * 開発確認用です。
-     */
-    clearSchedules() {
-      this.schedules = [];
-      this.persistSchedules();
-    },
-
-    /**
-     * localStorageから読み込みます。
-     *
-     * @returns {Object[]}
-     */
-    loadSchedules() {
-      try {
-        const stored =
-          window.localStorage.getItem(
-            STORAGE_KEY
-          );
-
-        if (!stored) {
-          return [];
-        }
-
-        const parsed =
-          JSON.parse(stored);
-
-        if (
-          !Array.isArray(parsed)
-        ) {
-          console.warn(
-            '保存済み予定データの形式が正しくありません。'
-          );
-
-          return [];
-        }
-
-        const schedules = [];
-
-        parsed.forEach(
-          (item) => {
-            try {
-              const schedule =
-                this.normalizeSchedule(
-                  item
-                );
-
-              this.validateSchedule(
-                schedule
-              );
-
-              schedules.push(
-                schedule
-              );
-            } catch (error) {
-              console.warn(
-                '不正な予定データを除外しました。',
-                error,
-                item
-              );
-            }
-          }
-        );
-
-        return schedules;
-      } catch (error) {
-        console.error(
-          '予定データの読み込みに失敗しました。',
-          error
-        );
-
         return [];
       }
-    },
 
-    /**
-     * localStorageへ保存します。
-     */
-    persistSchedules() {
-      try {
-        const serialized =
-          JSON.stringify(
-            this.schedules
-          );
+      const candidates = [
+        apiData.schedules,
+        apiData.records,
+        apiData.items,
+        apiData.rows,
+        apiData.list,
+        apiData.data,
+      ];
 
-        window.localStorage.setItem(
-          STORAGE_KEY,
-          serialized
-        );
-      } catch (error) {
-        console.error(
-          '予定データの保存に失敗しました。',
-          error
+      const found =
+        candidates.find(
+          (candidate) =>
+            Array.isArray(candidate)
         );
 
-        throw new Error(
-          '予定を保存できませんでした。ブラウザ設定または保存容量を確認してください。'
-        );
+      if (found) {
+        return found;
       }
+
+      return [];
     },
 
     /**
-     * 予定データを正規化します。
+     * API・localStorageの予定をアプリ形式へ変換します。
      *
-     * @param {Object} schedule
+     * @param {Object} record
      * @returns {Object}
      */
-    normalizeSchedule(
-      schedule
-    ) {
+    normalizeSchedule(record) {
+      const source =
+        record &&
+        typeof record === 'object'
+          ? record
+          : {};
+
       const allDay =
-        Boolean(
-          schedule?.allDay
+        this.toBoolean(
+          source.allDay ??
+          source.all_day ??
+          source.isAllDay
         );
 
       return {
         id:
           this.normalizeText(
-            schedule?.id
-          ),
+            source.id ??
+            source.scheduleId ??
+            source.schedule_id ??
+            source.ID
+          ) || this.createId(),
 
         scheduleType:
-          this.normalizeText(
-            schedule?.scheduleType
+          this.normalizeScheduleType(
+            source.scheduleType ??
+            source.schedule_type ??
+            source.type
           ),
 
         categories:
           this.normalizeCategories(
-            schedule?.categories
+            source.categories ??
+            source.category ??
+            source.targetCategories ??
+            source.target_categories
           ),
 
         title:
           this.normalizeText(
-            schedule?.title
+            source.title ??
+            source.scheduleTitle ??
+            source.name
           ),
 
         date:
-          this.normalizeText(
-            schedule?.date
+          this.normalizeDateValue(
+            source.date ??
+            source.scheduleDate ??
+            source.schedule_date ??
+            source.startDate
           ),
 
         allDay,
@@ -747,67 +753,86 @@
         startTime:
           allDay
             ? ''
-            : this.normalizeText(
-                schedule?.startTime
+            : this.normalizeTimeValue(
+                source.startTime ??
+                source.start_time
               ),
 
         endTime:
           allDay
             ? ''
-            : this.normalizeText(
-                schedule?.endTime
+            : this.normalizeTimeValue(
+                source.endTime ??
+                source.end_time
               ),
 
         meetingTime:
           allDay
             ? ''
-            : this.normalizeText(
-                schedule?.meetingTime
+            : this.normalizeTimeValue(
+                source.meetingTime ??
+                source.meeting_time
               ),
 
         location:
           this.normalizeText(
-            schedule?.location
+            source.location ??
+            source.venue ??
+            source.place
           ),
 
         mapUrl:
           this.normalizeText(
-            schedule?.mapUrl
+            source.mapUrl ??
+            source.map_url ??
+            source.googleMapUrl
           ),
 
         attendanceDeadline:
-          this.normalizeText(
-            schedule?.attendanceDeadline
+          this.normalizeDateTimeValue(
+            source.attendanceDeadline ??
+            source.attendance_deadline ??
+            source.deadline
           ),
 
         belongings:
           this.normalizeText(
-            schedule?.belongings
+            source.belongings ??
+            source.items ??
+            source.bringItems
           ),
 
         description:
           this.normalizeText(
-            schedule?.description
+            source.description ??
+            source.details ??
+            source.note
           ),
 
         coachNote:
           this.normalizeText(
-            schedule?.coachNote
+            source.coachNote ??
+            source.coach_note ??
+            source.internalNote
           ),
 
         status:
-          this.normalizeText(
-            schedule?.status
-          ) || 'draft',
+          this.normalizeStatus(
+            source.status ??
+            source.publishStatus ??
+            source.publish_status
+          ),
 
         createdAt:
           this.normalizeText(
-            schedule?.createdAt
+            source.createdAt ??
+            source.created_at
           ),
 
         updatedAt:
           this.normalizeText(
-            schedule?.updatedAt
+            source.updatedAt ??
+            source.updated_at
           ),
       };
     },
@@ -817,9 +842,7 @@
      *
      * @param {Object} schedule
      */
-    validateSchedule(
-      schedule
-    ) {
+    validateSchedule(schedule) {
       if (!schedule.id) {
         throw new Error(
           '予定IDがありません。'
@@ -827,7 +850,7 @@
       }
 
       if (
-        !SCHEDULE_TYPES.includes(
+        !VALID_SCHEDULE_TYPES.includes(
           schedule.scheduleType
         )
       ) {
@@ -841,36 +864,13 @@
         0
       ) {
         throw new Error(
-          '対象カテゴリーが選択されていません。'
-        );
-      }
-
-      const invalidCategory =
-        schedule.categories.some(
-          (category) =>
-            !CATEGORIES.includes(
-              category
-            )
-        );
-
-      if (invalidCategory) {
-        throw new Error(
-          '対象カテゴリーに不正な値があります。'
+          '対象カテゴリーがありません。'
         );
       }
 
       if (!schedule.title) {
         throw new Error(
-          'タイトルが入力されていません。'
-        );
-      }
-
-      if (
-        schedule.title.length >
-        100
-      ) {
-        throw new Error(
-          'タイトルは100文字以内で入力してください。'
+          'タイトルがありません。'
         );
       }
 
@@ -885,30 +885,7 @@
       }
 
       if (
-        !schedule.allDay &&
-        schedule.startTime &&
-        schedule.endTime &&
-        schedule.endTime <=
-          schedule.startTime
-      ) {
-        throw new Error(
-          '終了時間は開始時間より後に設定してください。'
-        );
-      }
-
-      if (
-        schedule.mapUrl &&
-        !this.isValidHttpUrl(
-          schedule.mapUrl
-        )
-      ) {
-        throw new Error(
-          'GoogleマップURLが正しくありません。'
-        );
-      }
-
-      if (
-        !STATUSES.includes(
+        !VALID_STATUSES.includes(
           schedule.status
         )
       ) {
@@ -919,30 +896,52 @@
     },
 
     /**
-     * 日付・時間順に並び替えます。
+     * 重複する予定IDを除外します。
+     *
+     * @param {Object[]} schedules
+     * @returns {Object[]}
+     */
+    removeDuplicateSchedules(
+      schedules
+    ) {
+      const map = new Map();
+
+      schedules.forEach(
+        (schedule) => {
+          map.set(
+            schedule.id,
+            schedule
+          );
+        }
+      );
+
+      return Array.from(
+        map.values()
+      );
+    },
+
+    /**
+     * 予定を日付・時間順に並べ替えます。
      */
     sortSchedules() {
       this.schedules.sort(
-        (
-          firstSchedule,
-          secondSchedule
-        ) => {
+        (first, second) => {
           const firstKey = [
-            firstSchedule.date,
-            firstSchedule.allDay
+            first.date,
+            first.allDay
               ? '00:00'
-              : firstSchedule.startTime ||
+              : first.startTime ||
                 '23:59',
-            firstSchedule.title,
+            first.title,
           ].join('|');
 
           const secondKey = [
-            secondSchedule.date,
-            secondSchedule.allDay
+            second.date,
+            second.allDay
               ? '00:00'
-              : secondSchedule.startTime ||
+              : second.startTime ||
                 '23:59',
-            secondSchedule.title,
+            second.title,
           ].join('|');
 
           return firstKey.localeCompare(
@@ -954,34 +953,457 @@
     },
 
     /**
-     * カテゴリー配列を正規化します。
+     * キャッシュを読み込みます。
      *
-     * @param {unknown} categories
-     * @returns {string[]}
+     * @returns {Object[]}
      */
-    normalizeCategories(
-      categories
-    ) {
-      if (
-        !Array.isArray(
-          categories
-        )
-      ) {
+    loadCachedSchedules() {
+      try {
+        const stored =
+          window.localStorage.getItem(
+            this.getStorageKey()
+          );
+
+        if (!stored) {
+          return [];
+        }
+
+        const parsed =
+          JSON.parse(stored);
+
+        if (!Array.isArray(parsed)) {
+          return [];
+        }
+
+        const schedules = [];
+
+        parsed.forEach((record) => {
+          try {
+            const schedule =
+              this.normalizeSchedule(
+                record
+              );
+
+            this.validateSchedule(
+              schedule
+            );
+
+            schedules.push(schedule);
+          } catch (error) {
+            console.warn(
+              '不正なキャッシュ予定を除外しました。',
+              error
+            );
+          }
+        });
+
+        return schedules;
+      } catch (error) {
+        console.error(
+          '予定キャッシュの読み込みに失敗しました。',
+          error
+        );
+
         return [];
       }
+    },
 
-      return [
+    /**
+     * キャッシュへ保存します。
+     */
+    persistSchedules() {
+      try {
+        window.localStorage.setItem(
+          this.getStorageKey(),
+          JSON.stringify(
+            this.schedules
+          )
+        );
+      } catch (error) {
+        console.error(
+          '予定キャッシュの保存に失敗しました。',
+          error
+        );
+
+        throw new Error(
+          '予定を端末へ保存できませんでした。'
+        );
+      }
+    },
+
+    /**
+     * localStorageキーを取得します。
+     *
+     * @returns {string}
+     */
+    getStorageKey() {
+      return (
+        window.NinjaConfig
+          ?.STORAGE
+          ?.SCHEDULES_KEY ||
+        DEFAULT_STORAGE_KEY
+      );
+    },
+
+    /**
+     * アプリ画面を再描画します。
+     */
+    renderApplication() {
+      window.requestAnimationFrame(
+        () => {
+          if (
+            window.NinjaApp &&
+            typeof window.NinjaApp
+              .renderApplication ===
+              'function'
+          ) {
+            window.NinjaApp
+              .renderApplication();
+
+            return;
+          }
+
+          if (
+            window.NinjaCalendar &&
+            typeof window.NinjaCalendar
+              .render === 'function'
+          ) {
+            window.NinjaCalendar
+              .render();
+          }
+        }
+      );
+    },
+
+    /**
+     * エラーメッセージを画面へ表示します。
+     *
+     * @param {string} message
+     */
+    notifyError(message) {
+      if (
+        window.NinjaApp &&
+        typeof window.NinjaApp
+          .showApplicationStatus ===
+          'function'
+      ) {
+        window.NinjaApp
+          .showApplicationStatus(
+            'error',
+            message
+          );
+      }
+    },
+
+    /**
+     * 状態変更イベントを送信します。
+     *
+     * @param {string} eventName
+     * @param {Object} detail
+     */
+    dispatchStateEvent(
+      eventName,
+      detail
+    ) {
+      window.dispatchEvent(
+        new CustomEvent(
+          eventName,
+          {
+            detail,
+          }
+        )
+      );
+    },
+
+    /**
+     * カテゴリーを正規化します。
+     *
+     * @param {unknown} value
+     * @returns {string[]}
+     */
+    normalizeCategories(value) {
+      let values = [];
+
+      if (Array.isArray(value)) {
+        values = value;
+      } else if (
+        typeof value === 'string'
+      ) {
+        const trimmed =
+          value.trim();
+
+        if (
+          trimmed.startsWith('[')
+        ) {
+          try {
+            const parsed =
+              JSON.parse(trimmed);
+
+            values =
+              Array.isArray(parsed)
+                ? parsed
+                : [];
+          } catch (error) {
+            values =
+              trimmed.split(
+                /[,、|]/
+              );
+          }
+        } else {
+          values =
+            trimmed.split(
+              /[,、|]/
+            );
+        }
+      }
+
+      const normalized = [
         ...new Set(
-          categories
-            .map(
-              (category) =>
-                this.normalizeText(
-                  category
-                )
+          values
+            .map((item) =>
+              this.normalizeCategory(
+                item
+              )
             )
-            .filter(Boolean)
+            .filter((item) =>
+              VALID_CATEGORIES.includes(
+                item
+              )
+            )
         ),
       ];
+
+      return normalized.length > 0
+        ? normalized
+        : ['boys-all'];
+    },
+
+    /**
+     * カテゴリー1件を正規化します。
+     *
+     * @param {unknown} value
+     * @returns {string}
+     */
+    normalizeCategory(value) {
+      const text =
+        this.normalizeText(value)
+          .toLowerCase();
+
+      const map = {
+        '男子全体': 'boys-all',
+        '女子全体': 'girls-all',
+        '男子u13': 'boys-u13',
+        '男子u14': 'boys-u14',
+        '男子u15': 'boys-u15',
+        '女子u13': 'girls-u13',
+        '女子u14': 'girls-u14',
+        '女子u15': 'girls-u15',
+      };
+
+      return map[
+        this.normalizeText(value)
+      ] || text;
+    },
+
+    /**
+     * 予定種別を正規化します。
+     *
+     * @param {unknown} value
+     * @returns {string}
+     */
+    normalizeScheduleType(value) {
+      const original =
+        this.normalizeText(value);
+
+      const lower =
+        original.toLowerCase();
+
+      const map = {
+        練習: 'practice',
+        試合: 'game',
+        遠征: 'trip',
+        off: 'off',
+        休み: 'off',
+      };
+
+      const normalized =
+        map[original] ||
+        lower;
+
+      return VALID_SCHEDULE_TYPES.includes(
+        normalized
+      )
+        ? normalized
+        : 'practice';
+    },
+
+    /**
+     * 公開状態を正規化します。
+     *
+     * @param {unknown} value
+     * @returns {string}
+     */
+    normalizeStatus(value) {
+      const original =
+        this.normalizeText(value);
+
+      const lower =
+        original.toLowerCase();
+
+      if (
+        original === '公開' ||
+        lower === 'published'
+      ) {
+        return 'published';
+      }
+
+      if (
+        original === '下書き' ||
+        lower === 'draft'
+      ) {
+        return 'draft';
+      }
+
+      return 'published';
+    },
+
+    /**
+     * 日付をYYYY-MM-DDへ変換します。
+     *
+     * @param {unknown} value
+     * @returns {string}
+     */
+    normalizeDateValue(value) {
+      const text =
+        this.normalizeText(value);
+
+      if (
+        this.isValidDate(text)
+      ) {
+        return text;
+      }
+
+      const date =
+        new Date(value);
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+        return '';
+      }
+
+      return this.formatDate(date);
+    },
+
+    /**
+     * 時刻をHH:mmへ変換します。
+     *
+     * @param {unknown} value
+     * @returns {string}
+     */
+    normalizeTimeValue(value) {
+      const text =
+        this.normalizeText(value);
+
+      const match =
+        text.match(
+          /^(\d{1,2}):(\d{2})/
+        );
+
+      if (!match) {
+        return '';
+      }
+
+      const hours =
+        Number(match[1]);
+
+      const minutes =
+        Number(match[2]);
+
+      if (
+        hours < 0 ||
+        hours > 23 ||
+        minutes < 0 ||
+        minutes > 59
+      ) {
+        return '';
+      }
+
+      return `${String(
+        hours
+      ).padStart(2, '0')}:${String(
+        minutes
+      ).padStart(2, '0')}`;
+    },
+
+    /**
+     * datetime-local形式へ変換します。
+     *
+     * @param {unknown} value
+     * @returns {string}
+     */
+    normalizeDateTimeValue(value) {
+      const text =
+        this.normalizeText(value);
+
+      if (!text) {
+        return '';
+      }
+
+      if (
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/
+          .test(text)
+      ) {
+        return text.slice(0, 16);
+      }
+
+      const date =
+        new Date(value);
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+        return '';
+      }
+
+      return `${this.formatDate(
+        date
+      )}T${String(
+        date.getHours()
+      ).padStart(2, '0')}:${String(
+        date.getMinutes()
+      ).padStart(2, '0')}`;
+    },
+
+    /**
+     * 真偽値へ変換します。
+     *
+     * @param {unknown} value
+     * @returns {boolean}
+     */
+    toBoolean(value) {
+      if (
+        value === true ||
+        value === 1
+      ) {
+        return true;
+      }
+
+      const text =
+        this.normalizeText(value)
+          .toLowerCase();
+
+      return [
+        'true',
+        '1',
+        'yes',
+        'on',
+        '終日',
+      ].includes(text);
     },
 
     /**
@@ -990,9 +1412,7 @@
      * @param {unknown} value
      * @returns {string}
      */
-    normalizeText(
-      value
-    ) {
+    normalizeText(value) {
       if (
         value === null ||
         value === undefined
@@ -1004,14 +1424,12 @@
     },
 
     /**
-     * YYYY-MM-DD形式の日付を確認します。
+     * YYYY-MM-DD形式か確認します。
      *
      * @param {string} value
      * @returns {boolean}
      */
-    isValidDate(
-      value
-    ) {
+    isValidDate(value) {
       if (
         !/^\d{4}-\d{2}-\d{2}$/.test(
           value
@@ -1046,62 +1464,12 @@
     },
 
     /**
-     * URL形式を確認します。
-     *
-     * @param {string} value
-     * @returns {boolean}
-     */
-    isValidHttpUrl(
-      value
-    ) {
-      try {
-        const url =
-          new URL(value);
-
-        return (
-          url.protocol ===
-            'http:' ||
-          url.protocol ===
-            'https:'
-        );
-      } catch (error) {
-        return false;
-      }
-    },
-
-    /**
-     * YYYY-MM-DDをDateへ変換します。
-     *
-     * @param {string} value
-     * @returns {Date}
-     */
-    parseDate(
-      value
-    ) {
-      const [
-        year,
-        month,
-        day,
-      ] = value
-        .split('-')
-        .map(Number);
-
-      return new Date(
-        year,
-        month - 1,
-        day
-      );
-    },
-
-    /**
      * DateをYYYY-MM-DDへ変換します。
      *
      * @param {Date} date
      * @returns {string}
      */
-    formatDate(
-      date
-    ) {
+    formatDate(date) {
       const year =
         date.getFullYear();
 
@@ -1143,14 +1511,12 @@
     },
 
     /**
-     * データを複製します。
+     * 値を複製します。
      *
      * @param {unknown} value
      * @returns {any}
      */
-    clone(
-      value
-    ) {
+    clone(value) {
       if (
         typeof structuredClone ===
         'function'
@@ -1161,15 +1527,12 @@
       }
 
       return JSON.parse(
-        JSON.stringify(
-          value
-        )
+        JSON.stringify(value)
       );
     },
   };
 
-  window.NinjaState =
-    State;
+  window.NinjaState = State;
 
   document.addEventListener(
     'DOMContentLoaded',
