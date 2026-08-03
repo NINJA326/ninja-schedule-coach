@@ -1,0 +1,723 @@
+/* ========================================
+   共通ボタン
+======================================== */
+
+.button,
+.icon-button,
+.app-menu__button,
+.floating-action-button {
+  appearance: none;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-target-min);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.button:hover,
+.icon-button:hover,
+.app-menu__button:hover,
+.floating-action-button:hover {
+  transform: translateY(-1px);
+}
+
+.button:active,
+.icon-button:active,
+.app-menu__button:active,
+.floating-action-button:active {
+  transform: translateY(0);
+}
+
+.button--primary {
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse);
+}
+
+.button--primary:hover {
+  background: var(--color-brand-primary-hover);
+}
+
+.button--secondary {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.button--secondary:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-muted);
+}
+
+.button--text {
+  min-height: var(--tap-target-min);
+  background: transparent;
+  color: var(--color-info);
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.button--text:hover {
+  color: var(--color-brand-accent);
+}
+
+.button--danger {
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
+}
+
+.button--danger:hover {
+  background: var(--color-danger-hover);
+}
+
+/* ========================================
+   アイコンボタン
+======================================== */
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-target-min);
+  min-width: var(--tap-target-min);
+  height: var(--tap-target-min);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font-size: var(--font-size-lg);
+  line-height: 1;
+}
+
+.app-header .icon-button {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-inverse);
+}
+
+.app-header .icon-button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.modal__header .icon-button {
+  border-color: var(--color-border-light);
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+}
+
+/* ========================================
+   メニュー
+======================================== */
+
+.app-menu__button:hover {
+  border-color: var(--color-brand-accent);
+  background: var(--color-brand-accent-soft);
+  color: var(--color-brand-accent-hover);
+}
+
+.app-menu__button[aria-current="page"] {
+  border-color: var(--color-brand-accent);
+  background: var(--color-brand-accent);
+  color: var(--color-text-inverse);
+}
+
+/* ========================================
+   ステータス表示
+======================================== */
+
+.status-panel {
+  border-color: var(--color-info-border);
+  background: var(--color-info-background);
+}
+
+.status-panel p {
+  color: var(--color-info);
+  font-weight: var(--font-weight-semibold);
+}
+
+.status-panel[data-status="success"] {
+  border-color: var(--color-success-border);
+  background: var(--color-success-background);
+}
+
+.status-panel[data-status="success"] p {
+  color: var(--color-success);
+}
+
+.status-panel[data-status="warning"] {
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-background);
+}
+
+.status-panel[data-status="warning"] p {
+  color: var(--color-warning);
+}
+
+.status-panel[data-status="error"] {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-background);
+}
+
+.status-panel[data-status="error"] p {
+  color: var(--color-danger);
+}
+
+/* ========================================
+   カレンダー曜日
+======================================== */
+
+.calendar__weekdays span:first-child {
+  color: var(--color-danger);
+}
+
+.calendar__weekdays span:last-child {
+  color: var(--color-info);
+}
+
+/* ========================================
+   カレンダー日付セル
+======================================== */
+
+.calendar-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 105px;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border-light);
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-surface);
+  padding: var(--space-2);
+  gap: var(--space-2);
+}
+
+.calendar-day:nth-child(7n) {
+  border-right: 0;
+}
+
+.calendar-day:hover {
+  background: var(--color-surface-muted);
+}
+
+.calendar-day--outside {
+  background: var(--color-surface-muted);
+}
+
+.calendar-day--outside .calendar-day__number {
+  color: var(--color-text-muted);
+  opacity: 0.65;
+}
+
+.calendar-day--today {
+  background: var(--color-brand-accent-soft);
+}
+
+.calendar-day--selected {
+  box-shadow: inset 0 0 0 2px var(--color-brand-accent);
+}
+
+.calendar-day__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.calendar-day__number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.calendar-day--today .calendar-day__number {
+  background: var(--color-brand-accent);
+  color: var(--color-text-inverse);
+}
+
+.calendar-day:nth-child(7n + 1) .calendar-day__number {
+  color: var(--color-danger);
+}
+
+.calendar-day:nth-child(7n) .calendar-day__number {
+  color: var(--color-info);
+}
+
+.calendar-day--today:nth-child(7n + 1) .calendar-day__number,
+.calendar-day--today:nth-child(7n) .calendar-day__number {
+  color: var(--color-text-inverse);
+}
+
+.calendar-day__events {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+/* ========================================
+   カレンダー予定
+======================================== */
+
+.calendar-event {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.35;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-event:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.calendar-event[data-schedule-type="practice"] {
+  border-color: var(--color-schedule-practice);
+  background: var(--color-schedule-practice-soft);
+  color: var(--color-success);
+}
+
+.calendar-event[data-schedule-type="game"] {
+  border-color: var(--color-schedule-game);
+  background: var(--color-schedule-game-soft);
+  color: var(--color-warning);
+}
+
+.calendar-event[data-schedule-type="trip"] {
+  border-color: var(--color-schedule-trip);
+  background: var(--color-schedule-trip-soft);
+  color: var(--color-info);
+}
+
+.calendar-event[data-schedule-type="off"] {
+  border-color: var(--color-schedule-off);
+  background: var(--color-schedule-off-soft);
+  color: var(--color-text-secondary);
+}
+
+.calendar-event[data-category="boys"] {
+  border-left-width: 4px;
+  border-left-color: var(--color-category-boys);
+}
+
+.calendar-event[data-category="girls"] {
+  border-left-width: 4px;
+  border-left-color: var(--color-category-girls);
+}
+
+.calendar-event[data-category="common"] {
+  border-left-width: 4px;
+  border-left-color: var(--color-category-common);
+}
+
+.calendar-event--draft {
+  border-style: dashed;
+  filter: saturate(0.7);
+  opacity: 0.78;
+}
+
+/* ========================================
+   予定件数表示
+======================================== */
+
+.calendar-day__more-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  background: transparent;
+  color: var(--color-info);
+  padding: 0 var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-align: left;
+}
+
+.calendar-day__more-button:hover {
+  text-decoration: underline;
+}
+
+/* ========================================
+   凡例
+======================================== */
+
+.schedule-legend__mark[data-schedule-type="practice"] {
+  background: var(--color-schedule-practice);
+}
+
+.schedule-legend__mark[data-schedule-type="game"] {
+  background: var(--color-schedule-game);
+}
+
+.schedule-legend__mark[data-schedule-type="trip"] {
+  background: var(--color-schedule-trip);
+}
+
+.schedule-legend__mark[data-schedule-type="off"] {
+  background: var(--color-schedule-off);
+}
+
+/* ========================================
+   今日の予定・日別予定カード
+======================================== */
+
+.schedule-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+  padding: var(--space-4);
+  gap: var(--space-3);
+  color: var(--color-text-primary);
+  text-align: left;
+}
+
+button.schedule-card {
+  cursor: pointer;
+}
+
+button.schedule-card:hover {
+  border-color: var(--color-brand-accent);
+  background: var(--color-brand-accent-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+.schedule-card__mark {
+  width: 10px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+}
+
+.schedule-card__mark[data-schedule-type="practice"] {
+  background: var(--color-schedule-practice);
+}
+
+.schedule-card__mark[data-schedule-type="game"] {
+  background: var(--color-schedule-game);
+}
+
+.schedule-card__mark[data-schedule-type="trip"] {
+  background: var(--color-schedule-trip);
+}
+
+.schedule-card__mark[data-schedule-type="off"] {
+  background: var(--color-schedule-off);
+}
+
+.schedule-card__content {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.schedule-card__title {
+  display: block;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-card__meta {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.schedule-card__action {
+  min-width: var(--tap-target-min);
+}
+
+/* ========================================
+   出欠状況
+======================================== */
+
+.attendance-summary__list > div:nth-child(1) dd {
+  color: var(--color-success);
+}
+
+.attendance-summary__list > div:nth-child(2) dd {
+  color: var(--color-danger);
+}
+
+.attendance-summary__list > div:nth-child(3) dd {
+  color: var(--color-warning);
+}
+
+/* ========================================
+   予定追加固定ボタン
+======================================== */
+
+.floating-action-button:hover {
+  background: var(--color-brand-accent-hover);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.22);
+}
+
+.floating-action-button:active {
+  box-shadow: var(--shadow-md);
+}
+
+/* ========================================
+   モーダル
+======================================== */
+
+.modal[open] {
+  animation: modal-open var(--transition-normal);
+}
+
+@keyframes modal-open {
+  from {
+    transform: translateY(12px) scale(0.98);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.modal__body > .empty-message {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+  padding: var(--space-8);
+  text-align: center;
+}
+
+/* ========================================
+   予定詳細
+======================================== */
+
+.schedule-detail-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.schedule-detail-list__row {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.32fr) minmax(0, 1fr);
+  min-width: 0;
+}
+
+.schedule-detail-list__row + .schedule-detail-list__row {
+  border-top: 1px solid var(--color-border-light);
+}
+
+.schedule-detail-list dt,
+.schedule-detail-list dd {
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.schedule-detail-list dt {
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.schedule-detail-list dd {
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.schedule-detail-list dd a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ========================================
+   フォーム部品
+======================================== */
+
+.form-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.form-grid--two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-field {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  gap: var(--space-2);
+}
+
+.form-field legend {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.form-field__required {
+  margin-left: var(--space-1);
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+}
+
+.form-field__help {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.form-field__error {
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.form-field input[aria-invalid="true"],
+.form-field select[aria-invalid="true"],
+.form-field textarea[aria-invalid="true"] {
+  border-color: var(--color-danger);
+  background: var(--color-danger-background);
+}
+
+.checkbox-group,
+.radio-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.checkbox-option,
+.radio-option {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: var(--tap-target-min);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+}
+
+.checkbox-option:hover,
+.radio-option:hover {
+  border-color: var(--color-brand-accent);
+  background: var(--color-brand-accent-soft);
+}
+
+.checkbox-option:has(input:checked),
+.radio-option:has(input:checked) {
+  border-color: var(--color-brand-accent);
+  background: var(--color-brand-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--color-brand-accent);
+}
+
+.checkbox-option input,
+.radio-option input {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+}
+
+.checkbox-option span,
+.radio-option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: var(--space-5);
+  gap: var(--space-3);
+}
+
+/* ========================================
+   読み込み表示
+======================================== */
+
+.loading-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.loading-indicator::before {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-brand-accent);
+  border-radius: var(--radius-pill);
+  content: "";
+  animation: loading-spin 700ms linear infinite;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ========================================
+   動きを減らす設定
+======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

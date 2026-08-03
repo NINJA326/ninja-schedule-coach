@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+
+  <meta
+    name="description"
+    content="NINJA AIRSコーチ用スケジュール管理アプリ"
+  >
+
+  <meta name="theme-color" content="#111827">
+
+  <title>NINJA SCHEDULE｜コーチ用</title>
+
+  <link rel="manifest" href="./manifest.json">
+
+  <link rel="stylesheet" href="./css/variables.css">
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/layout.css">
+  <link rel="stylesheet" href="./css/components.css">
+  <link rel="stylesheet" href="./css/responsive.css">
+
+  <script src="./js/config.js" defer></script>
+  <script src="./js/state.js" defer></script>
+  <script src="./js/utils.js" defer></script>
+  <script src="./js/validation.js" defer></script>
+  <script src="./js/api.js" defer></script>
+  <script src="./js/ui.js" defer></script>
+  <script src="./js/calendar.js" defer></script>
+  <script src="./js/app.js" defer></script>
+</head>
+
+<body>
+  <a class="skip-link" href="#main-content">
+    メインコンテンツへ移動
+  </a>
+
+  <div class="app-shell" id="app">
+    <header class="app-header">
+      <div class="app-header__content">
+        <div>
+          <p class="app-header__eyebrow">
+            NINJA AIRS
+          </p>
+
+          <h1 class="app-header__title">
+            NINJA SCHEDULE
+          </h1>
+
+          <p class="app-header__subtitle">
+            コーチ用スケジュール管理
+          </p>
+        </div>
+
+        <button
+          class="icon-button"
+          id="menu-button"
+          type="button"
+          aria-label="メニューを開く"
+          aria-expanded="false"
+          aria-controls="app-menu"
+        >
+          <span aria-hidden="true">☰</span>
+        </button>
+      </div>
+    </header>
+
+    <nav
+      class="app-menu"
+      id="app-menu"
+      aria-label="メインメニュー"
+      hidden
+    >
+      <ul class="app-menu__list">
+        <li>
+          <button
+            class="app-menu__button"
+            type="button"
+            data-action="show-calendar"
+          >
+            カレンダー
+          </button>
+        </li>
+
+        <li>
+          <button
+            class="app-menu__button"
+            type="button"
+            data-action="show-schedule-list"
+          >
+            予定一覧
+          </button>
+        </li>
+
+        <li>
+          <button
+            class="app-menu__button"
+            type="button"
+            data-action="show-attendance"
+          >
+            出欠状況
+          </button>
+        </li>
+
+        <li>
+          <button
+            class="app-menu__button"
+            type="button"
+            data-action="show-copy-panel"
+          >
+            予定複写
+          </button>
+        </li>
+      </ul>
+    </nav>
+
+    <main class="app-main" id="main-content">
+      <section
+        class="status-panel"
+        id="status-panel"
+        aria-live="polite"
+        hidden
+      >
+        <p id="status-message"></p>
+      </section>
+
+      <section
+        class="calendar-section"
+        id="calendar-section"
+        aria-labelledby="calendar-heading"
+      >
+        <div class="section-header">
+          <div>
+            <p class="section-header__label">
+              月間予定
+            </p>
+
+            <h2 id="calendar-heading">
+              カレンダー
+            </h2>
+          </div>
+
+          <div
+            class="calendar-controls"
+            aria-label="カレンダー操作"
+          >
+            <button
+              class="button button--secondary"
+              id="previous-month-button"
+              type="button"
+              aria-label="前の月を表示"
+            >
+              前月
+            </button>
+
+            <button
+              class="button button--secondary"
+              id="today-button"
+              type="button"
+            >
+              今月
+            </button>
+
+            <button
+              class="button button--secondary"
+              id="next-month-button"
+              type="button"
+              aria-label="次の月を表示"
+            >
+              次月
+            </button>
+          </div>
+        </div>
+
+        <div class="calendar-title-area">
+          <p
+            class="calendar-current-month"
+            id="calendar-current-month"
+            aria-live="polite"
+          >
+            読み込み中
+          </p>
+        </div>
+
+        <div
+          class="category-filter"
+          aria-labelledby="category-filter-heading"
+        >
+          <h3
+            class="visually-hidden"
+            id="category-filter-heading"
+          >
+            表示カテゴリー
+          </h3>
+
+          <label for="category-select">
+            カテゴリー
+          </label>
+
+          <select
+            id="category-select"
+            name="category"
+          >
+            <option value="all">すべて</option>
+            <option value="boys-all">男子全体</option>
+            <option value="girls-all">女子全体</option>
+            <option value="boys-u13">男子U13</option>
+            <option value="girls-u13">女子U13</option>
+            <option value="boys-u14">男子U14</option>
+            <option value="girls-u14">女子U14</option>
+            <option value="boys-u15">男子U15</option>
+            <option value="girls-u15">女子U15</option>
+          </select>
+        </div>
+
+        <div
+          class="calendar"
+          id="calendar"
+          aria-label="月間カレンダー"
+        >
+          <div
+            class="calendar__weekdays"
+            aria-hidden="true"
+          >
+            <span>日</span>
+            <span>月</span>
+            <span>火</span>
+            <span>水</span>
+            <span>木</span>
+            <span>金</span>
+            <span>土</span>
+          </div>
+
+          <div
+            class="calendar__grid"
+            id="calendar-grid"
+          >
+            <p class="empty-message">
+              カレンダーを準備しています。
+            </p>
+          </div>
+        </div>
+
+        <ul
+          class="schedule-legend"
+          aria-label="予定種別"
+        >
+          <li>
+            <span
+              class="schedule-legend__mark"
+              data-schedule-type="practice"
+            ></span>
+            練習
+          </li>
+
+          <li>
+            <span
+              class="schedule-legend__mark"
+              data-schedule-type="game"
+            ></span>
+            試合
+          </li>
+
+          <li>
+            <span
+              class="schedule-legend__mark"
+              data-schedule-type="trip"
+            ></span>
+            遠征
+          </li>
+
+          <li>
+            <span
+              class="schedule-legend__mark"
+              data-schedule-type="off"
+            ></span>
+            OFF
+          </li>
+        </ul>
+      </section>
+
+      <section
+        class="dashboard-section"
+        id="today-section"
+        aria-labelledby="today-heading"
+      >
+        <div class="section-header">
+          <div>
+            <p class="section-header__label">
+              本日の確認
+            </p>
+
+            <h2 id="today-heading">
+              今日の予定
+            </h2>
+          </div>
+        </div>
+
+        <div
+          class="schedule-list"
+          id="today-schedule-list"
+        >
+          <p class="empty-message">
+            今日の予定はありません。
+          </p>
+        </div>
+      </section>
+
+      <section
+        class="dashboard-section"
+        id="attendance-section"
+        aria-labelledby="attendance-heading"
+      >
+        <div class="section-header">
+          <div>
+            <p class="section-header__label">
+              回答状況
+            </p>
+
+            <h2 id="attendance-heading">
+              出欠状況
+            </h2>
+          </div>
+
+          <button
+            class="button button--text"
+            id="attendance-details-button"
+            type="button"
+          >
+            詳細を見る
+          </button>
+        </div>
+
+        <div
+          class="attendance-summary"
+          id="attendance-summary"
+        >
+          <dl class="attendance-summary__list">
+            <div>
+              <dt>参加</dt>
+              <dd id="attendance-present-count">0</dd>
+            </div>
+
+            <div>
+              <dt>欠席</dt>
+              <dd id="attendance-absent-count">0</dd>
+            </div>
+
+            <div>
+              <dt>未回答</dt>
+              <dd id="attendance-unanswered-count">0</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+    </main>
+
+    <button
+      class="floating-action-button"
+      id="add-schedule-button"
+      type="button"
+      aria-label="予定を追加"
+    >
+      <span aria-hidden="true">＋</span>
+      <span>予定追加</span>
+    </button>
+
+    <dialog
+      class="modal"
+      id="schedule-dialog"
+      aria-labelledby="schedule-dialog-title"
+    >
+      <form
+        class="modal__content"
+        id="schedule-form"
+        novalidate
+      >
+        <header class="modal__header">
+          <div>
+            <p class="modal__label">
+              スケジュール管理
+            </p>
+
+            <h2 id="schedule-dialog-title">
+              予定追加
+            </h2>
+          </div>
+
+          <button
+            class="icon-button"
+            id="close-schedule-dialog-button"
+            type="button"
+            aria-label="予定画面を閉じる"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="modal__body">
+          <input
+            id="schedule-id"
+            name="scheduleId"
+            type="hidden"
+            value=""
+          >
+
+          <div class="form-grid">
+            <fieldset class="form-field">
+              <legend>
+                予定種別
+                <span class="form-field__required">
+                  必須
+                </span>
+              </legend>
+
+              <div class="radio-group">
+                <label class="radio-option">
+                  <input
+                    name="scheduleType"
+                    type="radio"
+                    value="practice"
+                    checked
+                    required
+                  >
+                  <span>🏀 練習</span>
+                </label>
+
+                <label class="radio-option">
+                  <input
+                    name="scheduleType"
+                    type="radio"
+                    value="game"
+                    required
+                  >
+                  <span>🏆 試合</span>
+                </label>
+
+                <label class="radio-option">
+                  <input
+                    name="scheduleType"
+                    type="radio"
+                    value="trip"
+                    required
+                  >
+                  <span>🚐 遠征</span>
+                </label>
+
+                <label class="radio-option">
+                  <input
+                    name="scheduleType"
+                    type="radio"
+                    value="off"
+                    required
+                  >
+                  <span>❌ OFF</span>
+                </label>
+              </div>
+
+              <p
+                class="form-field__error"
+                id="schedule-type-error"
+                hidden
+              ></p>
+            </fieldset>
+
+            <fieldset class="form-field">
+              <legend>
+                対象カテゴリー
+                <span class="form-field__required">
+                  必須
+                </span>
+              </legend>
+
+              <div
+                class="checkbox-group"
+                id="schedule-category-options"
+              >
+                <label class="checkbox-option">
+                  <input
+                    name="categories"
+                    type="checkbox"
+                    value="boys-all"
+                  >
+                  <span>男子全体</span>
+                </label>
+
+                <label class="checkbox-option">
+                  <input
+                    name="categories"
+                    type="checkbox"
+                    value="girls-all"
+                  >
+                  <span>女子全体</span>
+                </label>
+
+                <label class="checkbox-option">
+                  <input
+                    name="categories"
+                    type="checkbox"
+                    value="boys-u13"
+                  >
+                  <span>男子U13</span>
+                </label>
+
+                <label class="checkbox-option">
+                  <input
+                    name="categories"
+                    type="checkbox"
+                    value="girls-u13"
+                  >
+                  <span>女子U13</span>
+                </label>
+
+                <label class="checkbox-option">
+                  <input
+                    name="categories"
+                    type="checkbox"
+                    value="boys-u14"
+                  >
+                  <span>男子U14</span>
+                </label>
+
+                <label class="checkbox-option">
+                  <input
+                    name="categories"
+                    type="checkbox"
+                    value="girls-u14"
+                  >
+                  <span>女子U14</span>
+                </label>
+
+                <label class="checkbox-option">
+                  <input
+                    name="categories"
+                    type="checkbox"
+                    value="boys-u15"
+                  >
+                  <span>男子U15</span>
+                </label>
+
+                <label class="checkbox-option">
+                  <input
+                    name="categories"
+                    type="checkbox"
+                    value="girls-u15"
+                  >
+                  <span>女子U15</span>
+                </label>
+              </div>
+
+              <p class="form-field__help">
+                左列が男子、右列が女子です。複数選択できます。
+              </p>
+
+              <p
+                class="form-field__error"
+                id="categories-error"
+                hidden
+              ></p>
+            </fieldset>
+
+            <div class="form-field">
+              <label for="schedule-title">
+                タイトル
+                <span class="form-field__required">
+                  必須
+                </span>
+              </label>
+
+              <input
+                id="schedule-title"
+                name="title"
+                type="text"
+                maxlength="100"
+                autocomplete="off"
+                placeholder="例：男子通常練習"
+                required
+              >
+
+              <p
+                class="form-field__error"
+                id="schedule-title-error"
+                hidden
+              ></p>
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-date">
+                日付
+                <span class="form-field__required">
+                  必須
+                </span>
+              </label>
+
+              <input
+                id="schedule-date"
+                name="date"
+                type="date"
+                required
+              >
+
+              <p
+                class="form-field__error"
+                id="schedule-date-error"
+                hidden
+              ></p>
+            </div>
+
+            <div class="form-field">
+              <label class="checkbox-option">
+                <input
+                  id="schedule-all-day"
+                  name="allDay"
+                  type="checkbox"
+                  value="true"
+                >
+                <span>終日予定にする</span>
+              </label>
+            </div>
+
+            <div
+              class="form-grid form-grid--two-columns"
+              id="schedule-time-fields"
+            >
+              <div class="form-field">
+                <label for="schedule-start-time">
+                  開始時間
+                </label>
+
+                <input
+                  id="schedule-start-time"
+                  name="startTime"
+                  type="time"
+                >
+
+                <p
+                  class="form-field__error"
+                  id="schedule-start-time-error"
+                  hidden
+                ></p>
+              </div>
+
+              <div class="form-field">
+                <label for="schedule-end-time">
+                  終了時間
+                </label>
+
+                <input
+                  id="schedule-end-time"
+                  name="endTime"
+                  type="time"
+                >
+
+                <p
+                  class="form-field__error"
+                  id="schedule-end-time-error"
+                  hidden
+                ></p>
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-meeting-time">
+                集合時間
+              </label>
+
+              <input
+                id="schedule-meeting-time"
+                name="meetingTime"
+                type="time"
+              >
+
+              <p
+                class="form-field__error"
+                id="schedule-meeting-time-error"
+                hidden
+              ></p>
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-location">
+                会場・集合場所
+              </label>
+
+              <input
+                id="schedule-location"
+                name="location"
+                type="text"
+                maxlength="150"
+                autocomplete="street-address"
+                placeholder="例：皇子山体育館"
+              >
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-map-url">
+                GoogleマップURL
+              </label>
+
+              <input
+                id="schedule-map-url"
+                name="mapUrl"
+                type="url"
+                maxlength="500"
+                inputmode="url"
+                autocomplete="url"
+                placeholder="https://maps.google.com/..."
+              >
+
+              <p
+                class="form-field__error"
+                id="schedule-map-url-error"
+                hidden
+              ></p>
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-attendance-deadline">
+                出欠回答締切
+              </label>
+
+              <input
+                id="schedule-attendance-deadline"
+                name="attendanceDeadline"
+                type="datetime-local"
+              >
+
+              <p
+                class="form-field__error"
+                id="schedule-attendance-deadline-error"
+                hidden
+              ></p>
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-belongings">
+                持ち物
+              </label>
+
+              <textarea
+                id="schedule-belongings"
+                name="belongings"
+                maxlength="1000"
+                placeholder="例：バッシュ、飲み物、着替え"
+              ></textarea>
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-description">
+                予定詳細
+              </label>
+
+              <textarea
+                id="schedule-description"
+                name="description"
+                maxlength="3000"
+                placeholder="練習内容、集合方法、注意事項など"
+              ></textarea>
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-coach-note">
+                コーチ内部メモ
+              </label>
+
+              <textarea
+                id="schedule-coach-note"
+                name="coachNote"
+                maxlength="3000"
+                placeholder="選手・保護者には表示されません"
+              ></textarea>
+
+              <p class="form-field__help">
+                この項目はコーチ画面だけで使用します。
+              </p>
+            </div>
+
+            <div class="form-field">
+              <label for="schedule-status">
+                公開状態
+                <span class="form-field__required">
+                  必須
+                </span>
+              </label>
+
+              <select
+                id="schedule-status"
+                name="status"
+                required
+              >
+                <option value="published">
+                  公開する
+                </option>
+
+                <option value="draft">
+                  下書き保存
+                </option>
+              </select>
+            </div>
+
+            <div
+              class="status-panel"
+              id="schedule-form-status"
+              aria-live="polite"
+              hidden
+            >
+              <p id="schedule-form-status-message"></p>
+            </div>
+          </div>
+
+          <footer class="form-actions">
+            <button
+              class="button button--secondary"
+              id="cancel-schedule-button"
+              type="button"
+            >
+              キャンセル
+            </button>
+
+            <button
+              class="button button--primary"
+              id="save-schedule-button"
+              type="submit"
+            >
+              予定を保存
+            </button>
+          </footer>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      class="modal"
+      id="schedule-detail-dialog"
+      aria-labelledby="schedule-detail-title"
+    >
+      <article class="modal__content">
+        <header class="modal__header">
+          <div>
+            <p class="modal__label">
+              予定詳細
+            </p>
+
+            <h2 id="schedule-detail-title">
+              予定
+            </h2>
+          </div>
+
+          <button
+            class="icon-button"
+            id="close-schedule-detail-button"
+            type="button"
+            aria-label="予定詳細を閉じる"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="modal__body">
+          <div id="schedule-detail-content">
+            <p class="empty-message">
+              予定を読み込んでいます。
+            </p>
+          </div>
+
+          <footer class="form-actions">
+            <button
+              class="button button--danger"
+              id="delete-schedule-button"
+              type="button"
+            >
+              削除
+            </button>
+
+            <button
+              class="button button--secondary"
+              id="copy-schedule-button"
+              type="button"
+            >
+              複写
+            </button>
+
+            <button
+              class="button button--primary"
+              id="edit-schedule-button"
+              type="button"
+            >
+              編集
+            </button>
+          </footer>
+        </div>
+      </article>
+    </dialog>
+
+    <noscript>
+      <section class="noscript-message">
+        <h2>JavaScriptを有効にしてください</h2>
+
+        <p>
+          このアプリを利用するには、ブラウザのJavaScriptを有効にする必要があります。
+        </p>
+      </section>
+    </noscript>
+  </div>
+</body>
+</html>

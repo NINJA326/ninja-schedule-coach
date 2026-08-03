@@ -1,0 +1,195 @@
+:root {
+  /* ========================================
+     基本色
+  ======================================== */
+
+  --color-background: #f3f4f6;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f9fafb;
+  --color-surface-strong: #eef2f7;
+
+  --color-text-primary: #111827;
+  --color-text-secondary: #4b5563;
+  --color-text-muted: #6b7280;
+  --color-text-inverse: #ffffff;
+
+  --color-border: #d1d5db;
+  --color-border-light: #e5e7eb;
+  --color-border-strong: #9ca3af;
+
+  /* ========================================
+     ブランドカラー
+  ======================================== */
+
+  --color-brand-primary: #111827;
+  --color-brand-primary-hover: #1f2937;
+  --color-brand-primary-active: #030712;
+
+  --color-brand-accent: #7c3aed;
+  --color-brand-accent-hover: #6d28d9;
+  --color-brand-accent-soft: #ede9fe;
+
+  /* ========================================
+     状態色
+  ======================================== */
+
+  --color-success: #15803d;
+  --color-success-background: #dcfce7;
+  --color-success-border: #86efac;
+
+  --color-warning: #a16207;
+  --color-warning-background: #fef3c7;
+  --color-warning-border: #fde68a;
+
+  --color-danger: #b91c1c;
+  --color-danger-hover: #991b1b;
+  --color-danger-background: #fee2e2;
+  --color-danger-border: #fca5a5;
+
+  --color-info: #1d4ed8;
+  --color-info-background: #dbeafe;
+  --color-info-border: #93c5fd;
+
+  /* ========================================
+     カテゴリー色
+  ======================================== */
+
+  --color-category-boys: #2563eb;
+  --color-category-boys-soft: #dbeafe;
+  --color-category-boys-border: #60a5fa;
+
+  --color-category-girls: #dc2626;
+  --color-category-girls-soft: #fee2e2;
+  --color-category-girls-border: #f87171;
+
+  --color-category-common: #7c3aed;
+  --color-category-common-soft: #ede9fe;
+  --color-category-common-border: #a78bfa;
+
+  /* ========================================
+     予定種別
+  ======================================== */
+
+  --color-schedule-practice: #16a34a;
+  --color-schedule-practice-soft: #dcfce7;
+
+  --color-schedule-game: #d97706;
+  --color-schedule-game-soft: #fef3c7;
+
+  --color-schedule-trip: #2563eb;
+  --color-schedule-trip-soft: #dbeafe;
+
+  --color-schedule-off: #6b7280;
+  --color-schedule-off-soft: #e5e7eb;
+
+  /* ========================================
+     フォーカス
+  ======================================== */
+
+  --color-focus: #2563eb;
+  --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.25);
+
+  /* ========================================
+     フォント
+  ======================================== */
+
+  --font-family-base:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Hiragino Kaku Gothic ProN",
+    "Hiragino Sans",
+    "Yu Gothic",
+    "Meiryo",
+    sans-serif;
+
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-md: 1.125rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 1.875rem;
+  --font-size-3xl: 2.25rem;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.7;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ========================================
+     余白
+  ======================================== */
+
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* ========================================
+     角丸
+  ======================================== */
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-pill: 9999px;
+
+  /* ========================================
+     影
+  ======================================== */
+
+  --shadow-sm:
+    0 1px 2px rgba(15, 23, 42, 0.08);
+
+  --shadow-md:
+    0 4px 12px rgba(15, 23, 42, 0.1);
+
+  --shadow-lg:
+    0 12px 30px rgba(15, 23, 42, 0.16);
+
+  /* ========================================
+     レイアウト
+  ======================================== */
+
+  --app-max-width: 1200px;
+  --header-height: 72px;
+  --content-padding-mobile: 1rem;
+  --content-padding-tablet: 1.5rem;
+  --content-padding-desktop: 2rem;
+
+  /* ========================================
+     タップ領域
+  ======================================== */
+
+  --tap-target-min: 44px;
+
+  /* ========================================
+     アニメーション
+  ======================================== */
+
+  --transition-fast: 120ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* ========================================
+     Z-index
+  ======================================== */
+
+  --z-header: 100;
+  --z-menu: 200;
+  --z-floating-button: 300;
+  --z-modal: 500;
+}

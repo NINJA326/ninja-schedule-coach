@@ -1,0 +1,362 @@
+/* ========================================
+   小型スマートフォン
+======================================== */
+
+@media (max-width: 479px) {
+  .app-header__content {
+    min-height: 64px;
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+  }
+
+  .app-header__eyebrow {
+    font-size: 0.68rem;
+  }
+
+  .app-header__title {
+    font-size: var(--font-size-lg);
+  }
+
+  .app-header__subtitle {
+    font-size: 0.68rem;
+  }
+
+  .app-main {
+    padding-top: var(--space-3);
+    padding-bottom: 110px;
+  }
+
+  .calendar-section,
+  .dashboard-section {
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+  }
+
+  .section-header {
+    display: grid;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .section-header h2 {
+    font-size: var(--font-size-lg);
+  }
+
+  .calendar-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .calendar-controls .button {
+    width: 100%;
+    min-width: 0;
+    padding-right: var(--space-2);
+    padding-left: var(--space-2);
+  }
+
+  .calendar-current-month {
+    font-size: var(--font-size-md);
+  }
+
+  .category-filter {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .calendar__weekdays span {
+    min-height: 34px;
+    font-size: 0.7rem;
+  }
+
+  .calendar-day {
+    min-height: 72px;
+    padding: var(--space-1);
+    gap: var(--space-1);
+  }
+
+  .calendar-day__number {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    font-size: 0.75rem;
+  }
+
+  .calendar-event {
+    padding: 2px 4px;
+    font-size: 0.62rem;
+  }
+
+  .calendar-day__more-button {
+    min-height: 22px;
+    font-size: 0.62rem;
+  }
+
+  .schedule-legend {
+    gap: var(--space-2) var(--space-3);
+  }
+
+  .attendance-summary__list {
+    grid-template-columns: 1fr;
+  }
+
+  .attendance-summary__list > div {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    justify-items: stretch;
+    min-height: 62px;
+    text-align: left;
+  }
+
+  .attendance-summary__list > div + div {
+    border-top: 1px solid var(--color-border-light);
+    border-left: 0;
+  }
+
+  .attendance-summary dd {
+    margin-top: 0;
+    font-size: var(--font-size-xl);
+    text-align: right;
+  }
+
+  .floating-action-button {
+    right: max(
+      var(--space-3),
+      env(safe-area-inset-right)
+    );
+    bottom: max(
+      var(--space-3),
+      env(safe-area-inset-bottom)
+    );
+    min-height: 52px;
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .floating-action-button span:last-child {
+    font-size: var(--font-size-sm);
+  }
+
+  .modal {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .modal__header,
+  .modal__body {
+    padding: var(--space-4);
+  }
+
+  .checkbox-group,
+  .radio-group {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions .button {
+    width: 100%;
+  }
+}
+
+/* ========================================
+   一般的なスマートフォン
+======================================== */
+
+@media (min-width: 480px) and (max-width: 767px) {
+  .app-main {
+    padding-top: var(--space-4);
+    padding-bottom: 110px;
+  }
+
+  .calendar-section,
+  .dashboard-section {
+    padding: var(--space-4);
+  }
+
+  .section-header {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .calendar-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .calendar-controls .button {
+    width: 100%;
+  }
+
+  .calendar-day {
+    min-height: 84px;
+    padding: var(--space-1);
+  }
+
+  .calendar-day__number {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+  }
+
+  .calendar-event {
+    padding-right: var(--space-1);
+    padding-left: var(--space-1);
+    font-size: 0.68rem;
+  }
+}
+
+/* ========================================
+   タブレット
+======================================== */
+
+@media (min-width: 768px) {
+  .app-header__content {
+    padding-right: var(--content-padding-tablet);
+    padding-left: var(--content-padding-tablet);
+  }
+
+  .app-main {
+    padding:
+      var(--space-6)
+      var(--content-padding-tablet)
+      calc(var(--space-16) + 72px);
+  }
+
+  .app-menu__list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding-right: var(--content-padding-tablet);
+    padding-left: var(--content-padding-tablet);
+  }
+
+  .calendar-section {
+    padding: var(--space-6);
+  }
+
+  .dashboard-section {
+    padding: var(--space-5);
+  }
+
+  .calendar-day {
+    min-height: 112px;
+  }
+
+  .modal__header,
+  .modal__body {
+    padding: var(--space-6);
+  }
+}
+
+/* ========================================
+   PC
+======================================== */
+
+@media (min-width: 1024px) {
+  .app-header__content {
+    padding-right: var(--content-padding-desktop);
+    padding-left: var(--content-padding-desktop);
+  }
+
+  .app-main {
+    padding:
+      var(--space-8)
+      var(--content-padding-desktop)
+      calc(var(--space-16) + 72px);
+  }
+
+  .app-menu__list {
+    padding-right: var(--content-padding-desktop);
+    padding-left: var(--content-padding-desktop);
+  }
+
+  .calendar-section {
+    padding: var(--space-6);
+  }
+
+  .calendar-day {
+    min-height: 124px;
+  }
+
+  .floating-action-button {
+    right: max(
+      var(--content-padding-desktop),
+      calc((100vw - var(--app-max-width)) / 2 + var(--space-4))
+    );
+  }
+}
+
+/* ========================================
+   大型PC
+======================================== */
+
+@media (min-width: 1280px) {
+  .app-main {
+    padding-top: var(--space-10);
+  }
+
+  .calendar-day {
+    min-height: 132px;
+  }
+}
+
+/* ========================================
+   横向きスマートフォン
+======================================== */
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .app-header {
+    position: relative;
+  }
+
+  .app-menu {
+    position: relative;
+    top: auto;
+  }
+
+  .modal {
+    max-height: calc(100vh - 16px);
+  }
+
+  .floating-action-button {
+    min-height: 46px;
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+  }
+}
+
+/* ========================================
+   印刷
+======================================== */
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  .app-header,
+  .app-menu,
+  .calendar-controls,
+  .category-filter,
+  .floating-action-button,
+  .button,
+  .icon-button {
+    display: none !important;
+  }
+
+  .app-main {
+    max-width: none;
+    padding: 0;
+  }
+
+  .calendar-section,
+  .dashboard-section {
+    break-inside: avoid;
+    border: 1px solid #999999;
+    box-shadow: none;
+  }
+
+  .calendar-day {
+    min-height: 90px;
+  }
+}
