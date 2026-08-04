@@ -5,6 +5,14 @@
  * validation.js
  *
  * 予定フォームの入力検証とデータ取得を管理します。
+ *
+ * 対応機能:
+ * - 1日登録
+ * - 複数日一括登録
+ * - 編集時の単一日固定
+ * - カテゴリー必須
+ * - 時間整合性
+ * - URL検証
  */
 
 (function () {
@@ -16,7 +24,9 @@
      */
     init() {
       this.form =
-        document.getElementById('schedule-form');
+        document.getElementById(
+          'schedule-form'
+        );
 
       if (!this.form) {
         console.error(
@@ -36,14 +46,29 @@
       this.form.addEventListener(
         'input',
         (event) => {
-          const target = event.target;
+          const target =
+            event.target;
 
           if (
-            target instanceof HTMLInputElement ||
-            target instanceof HTMLSelectElement ||
-            target instanceof HTMLTextAreaElement
+            target instanceof
+              HTMLInputElement ||
+            target instanceof
+              HTMLSelectElement ||
+            target instanceof
+              HTMLTextAreaElement
           ) {
-            this.clearFieldError(target);
+            this.clearFieldError(
+              target
+            );
+          }
+
+          if (
+            target instanceof
+              HTMLInputElement &&
+            target.name ===
+              'multipleDates'
+          ) {
+            this.clearMultipleDatesError();
           }
         }
       );
@@ -51,21 +76,47 @@
       this.form.addEventListener(
         'change',
         (event) => {
-          const target = event.target;
+          const target =
+            event.target;
 
           if (
-            target instanceof HTMLInputElement ||
-            target instanceof HTMLSelectElement ||
-            target instanceof HTMLTextAreaElement
+            target instanceof
+              HTMLInputElement ||
+            target instanceof
+              HTMLSelectElement ||
+            target instanceof
+              HTMLTextAreaElement
           ) {
-            this.clearFieldError(target);
+            this.clearFieldError(
+              target
+            );
           }
 
           if (
-            target instanceof HTMLInputElement &&
-            target.name === 'categories'
+            target instanceof
+              HTMLInputElement &&
+            target.name ===
+              'categories'
           ) {
             this.clearCategoriesError();
+          }
+
+          if (
+            target instanceof
+              HTMLInputElement &&
+            target.name ===
+              'multipleDates'
+          ) {
+            this.clearMultipleDatesError();
+          }
+
+          if (
+            target instanceof
+              HTMLInputElement &&
+            target.name ===
+              'dateMode'
+          ) {
+            this.clearDateErrors();
           }
         }
       );
@@ -93,18 +144,27 @@
         this.getScheduleFormData();
 
       let isValid = true;
-      let firstInvalidElement = null;
+      let firstInvalidElement =
+        null;
 
-      const setFirstInvalidElement = (element) => {
-        if (!firstInvalidElement && element) {
-          firstInvalidElement = element;
-        }
-      };
+      const setFirstInvalidElement =
+        (element) => {
+          if (
+            !firstInvalidElement &&
+            element
+          ) {
+            firstInvalidElement =
+              element;
+          }
+        };
 
+      /*
+       * 予定種別
+       */
       if (!formData.scheduleType) {
         isValid = false;
 
-        const scheduleTypeInput =
+        const input =
           this.form.querySelector(
             'input[name="scheduleType"]'
           );
@@ -114,13 +174,21 @@
           '予定種別を選択してください。'
         );
 
-        setFirstInvalidElement(scheduleTypeInput);
+        setFirstInvalidElement(
+          input
+        );
       }
 
-      if (formData.categories.length === 0) {
+      /*
+       * 対象カテゴリー
+       */
+      if (
+        formData.categories.length ===
+        0
+      ) {
         isValid = false;
 
-        const categoryInput =
+        const input =
           this.form.querySelector(
             'input[name="categories"]'
           );
@@ -130,11 +198,18 @@
           '対象カテゴリーを1つ以上選択してください。'
         );
 
-        setFirstInvalidElement(categoryInput);
+        setFirstInvalidElement(
+          input
+        );
       }
 
+      /*
+       * タイトル
+       */
       const titleInput =
-        document.getElementById('schedule-title');
+        document.getElementById(
+          'schedule-title'
+        );
 
       if (!formData.title) {
         isValid = false;
@@ -145,10 +220,13 @@
           'タイトルを入力してください。'
         );
 
-        setFirstInvalidElement(titleInput);
-      }
-
-      if (formData.title.length > 100) {
+        setFirstInvalidElement(
+          titleInput
+        );
+      } else if (
+        formData.title.length >
+        100
+      ) {
         isValid = false;
 
         this.setFieldError(
@@ -157,34 +235,83 @@
           'タイトルは100文字以内で入力してください。'
         );
 
-        setFirstInvalidElement(titleInput);
+        setFirstInvalidElement(
+          titleInput
+        );
       }
 
-      const dateInput =
-        document.getElementById('schedule-date');
+      /*
+       * 日付
+       */
+      if (
+        formData.dateMode ===
+        'multiple'
+      ) {
+        const multipleDateInput =
+          this.form.querySelector(
+            'input[name="multipleDates"]'
+          );
 
-      if (!formData.date) {
-        isValid = false;
+        if (
+          formData.multipleDates
+            .length === 0
+        ) {
+          isValid = false;
 
-        this.setFieldError(
-          dateInput,
-          'schedule-date-error',
-          '日付を入力してください。'
-        );
+          this.showError(
+            'schedule-multiple-dates-error',
+            '登録する日付を1つ以上入力してください。'
+          );
 
-        setFirstInvalidElement(dateInput);
-      } else if (!this.isValidDateString(formData.date)) {
-        isValid = false;
+          multipleDateInput?.setAttribute(
+            'aria-invalid',
+            'true'
+          );
 
-        this.setFieldError(
-          dateInput,
-          'schedule-date-error',
-          '正しい日付を入力してください。'
-        );
+          setFirstInvalidElement(
+            multipleDateInput
+          );
+        }
+      } else {
+        const dateInput =
+          document.getElementById(
+            'schedule-date'
+          );
 
-        setFirstInvalidElement(dateInput);
+        if (!formData.date) {
+          isValid = false;
+
+          this.setFieldError(
+            dateInput,
+            'schedule-date-error',
+            '日付を入力してください。'
+          );
+
+          setFirstInvalidElement(
+            dateInput
+          );
+        } else if (
+          !this.isValidDateString(
+            formData.date
+          )
+        ) {
+          isValid = false;
+
+          this.setFieldError(
+            dateInput,
+            'schedule-date-error',
+            '正しい日付を入力してください。'
+          );
+
+          setFirstInvalidElement(
+            dateInput
+          );
+        }
       }
 
+      /*
+       * 時間
+       */
       if (!formData.allDay) {
         const startTimeInput =
           document.getElementById(
@@ -202,38 +329,6 @@
           );
 
         if (
-          formData.startTime &&
-          formData.endTime &&
-          formData.endTime <= formData.startTime
-        ) {
-          isValid = false;
-
-          this.setFieldError(
-            endTimeInput,
-            'schedule-end-time-error',
-            '終了時間は開始時間より後に設定してください。'
-          );
-
-          setFirstInvalidElement(endTimeInput);
-        }
-
-        if (
-          formData.meetingTime &&
-          formData.startTime &&
-          formData.meetingTime > formData.startTime
-        ) {
-          isValid = false;
-
-          this.setFieldError(
-            meetingTimeInput,
-            'schedule-start-time-error',
-            '集合時間は開始時間以前に設定してください。'
-          );
-
-          setFirstInvalidElement(meetingTimeInput);
-        }
-
-        if (
           formData.endTime &&
           !formData.startTime
         ) {
@@ -245,10 +340,53 @@
             '終了時間を設定する場合は開始時間も入力してください。'
           );
 
-          setFirstInvalidElement(startTimeInput);
+          setFirstInvalidElement(
+            startTimeInput
+          );
+        }
+
+        if (
+          formData.startTime &&
+          formData.endTime &&
+          formData.endTime <=
+            formData.startTime
+        ) {
+          isValid = false;
+
+          this.setFieldError(
+            endTimeInput,
+            'schedule-end-time-error',
+            '終了時間は開始時間より後に設定してください。'
+          );
+
+          setFirstInvalidElement(
+            endTimeInput
+          );
+        }
+
+        if (
+          formData.meetingTime &&
+          formData.startTime &&
+          formData.meetingTime >
+            formData.startTime
+        ) {
+          isValid = false;
+
+          this.setFieldError(
+            meetingTimeInput,
+            'schedule-meeting-time-error',
+            '集合時間は開始時間以前に設定してください。'
+          );
+
+          setFirstInvalidElement(
+            meetingTimeInput
+          );
         }
       }
 
+      /*
+       * GoogleマップURL
+       */
       const mapUrlInput =
         document.getElementById(
           'schedule-map-url'
@@ -256,7 +394,9 @@
 
       if (
         formData.mapUrl &&
-        !this.isValidHttpUrl(formData.mapUrl)
+        !this.isValidHttpUrl(
+          formData.mapUrl
+        )
       ) {
         isValid = false;
 
@@ -266,21 +406,57 @@
           'http:// または https:// から始まる正しいURLを入力してください。'
         );
 
-        setFirstInvalidElement(mapUrlInput);
+        setFirstInvalidElement(
+          mapUrlInput
+        );
       }
 
-      if (!isValid && firstInvalidElement) {
+      /*
+       * 出欠回答締切
+       */
+      const deadlineInput =
+        document.getElementById(
+          'schedule-attendance-deadline'
+        );
+
+      if (
+        formData.attendanceDeadline &&
+        !this.isValidDateTimeLocal(
+          formData.attendanceDeadline
+        )
+      ) {
+        isValid = false;
+
+        this.setFieldError(
+          deadlineInput,
+          'schedule-attendance-deadline-error',
+          '正しい回答締切を入力してください。'
+        );
+
+        setFirstInvalidElement(
+          deadlineInput
+        );
+      }
+
+      if (
+        !isValid &&
+        firstInvalidElement
+      ) {
         firstInvalidElement.focus();
 
-        firstInvalidElement.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-        });
+        firstInvalidElement
+          .scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
       }
 
       return {
         isValid,
-        data: isValid ? formData : null,
+        data:
+          isValid
+            ? formData
+            : null,
       };
     },
 
@@ -300,17 +476,24 @@
           this.form.querySelectorAll(
             'input[name="categories"]:checked'
           )
-        ).map((input) => input.value);
+        ).map(
+          (input) =>
+            input.value
+        );
 
       const getValue = (id) => {
         const element =
-          document.getElementById(id);
+          document.getElementById(
+            id
+          );
 
         if (!element) {
           return '';
         }
 
-        return element.value.trim();
+        return String(
+          element.value || ''
+        ).trim();
       };
 
       const allDayInput =
@@ -319,13 +502,41 @@
         );
 
       const allDay =
-        Boolean(allDayInput?.checked);
+        Boolean(
+          allDayInput?.checked
+        );
+
+      const dateMode =
+        this.getDateMode();
+
+      const multipleDates =
+        dateMode === 'multiple'
+          ? this.getMultipleDates()
+          : [];
+
+      const singleDate =
+        getValue(
+          'schedule-date'
+        );
+
+      /*
+       * 既存コードとの互換性のため、
+       * 複数日登録時もdateへ最初の日付を設定します。
+       */
+      const primaryDate =
+        dateMode === 'multiple'
+          ? multipleDates[0] || ''
+          : singleDate;
 
       return {
-        id: getValue('schedule-id'),
+        id:
+          getValue(
+            'schedule-id'
+          ),
 
         scheduleType:
-          selectedType?.value || '',
+          selectedType?.value ||
+          '',
 
         categories:
           this.normalizeCategories(
@@ -333,10 +544,16 @@
           ),
 
         title:
-          getValue('schedule-title'),
+          getValue(
+            'schedule-title'
+          ),
+
+        dateMode,
 
         date:
-          getValue('schedule-date'),
+          primaryDate,
+
+        multipleDates,
 
         allDay,
 
@@ -362,10 +579,14 @@
               ),
 
         location:
-          getValue('schedule-location'),
+          getValue(
+            'schedule-location'
+          ),
 
         mapUrl:
-          getValue('schedule-map-url'),
+          getValue(
+            'schedule-map-url'
+          ),
 
         attendanceDeadline:
           getValue(
@@ -373,32 +594,185 @@
           ),
 
         belongings:
-          getValue('schedule-belongings'),
+          getValue(
+            'schedule-belongings'
+          ),
 
         description:
-          getValue('schedule-description'),
+          getValue(
+            'schedule-description'
+          ),
 
         coachNote:
-          getValue('schedule-coach-note'),
+          getValue(
+            'schedule-coach-note'
+          ),
 
         status:
-          getValue('schedule-status'),
+          getValue(
+            'schedule-status'
+          ),
       };
     },
 
     /**
-     * 「全体」が選択されている場合は、
-     * 他のカテゴリーを除外します。
+     * 現在の日付登録方法を取得します。
+     *
+     * @returns {'single'|'multiple'}
+     */
+    getDateMode() {
+      if (
+        window.NinjaUI &&
+        typeof window.NinjaUI
+          .getDateMode ===
+          'function'
+      ) {
+        return window.NinjaUI
+          .getDateMode();
+      }
+
+      const multipleInput =
+        document.getElementById(
+          'schedule-date-mode-multiple'
+        );
+
+      return multipleInput?.checked
+        ? 'multiple'
+        : 'single';
+    },
+
+    /**
+     * 複数日入力値を取得します。
+     *
+     * 空欄、不正日付、重複を除外し、
+     * 日付順に並べます。
+     *
+     * @returns {string[]}
+     */
+    getMultipleDates() {
+      let dates = [];
+
+      if (
+        window.NinjaUI &&
+        typeof window.NinjaUI
+          .getSelectedMultipleDates ===
+          'function'
+      ) {
+        dates =
+          window.NinjaUI
+            .getSelectedMultipleDates();
+      } else {
+        dates =
+          Array.from(
+            this.form.querySelectorAll(
+              'input[name="multipleDates"]'
+            )
+          )
+            .map(
+              (input) =>
+                String(
+                  input.value || ''
+                ).trim()
+            );
+      }
+
+      return [
+        ...new Set(
+          dates.filter(
+            (date) =>
+              this.isValidDateString(
+                date
+              )
+          )
+        ),
+      ].sort();
+    },
+
+    /**
+     * カテゴリー配列を正規化します。
+     *
+     * 男子全体と男子年代、女子全体と女子年代が
+     * 同時に含まれた場合は、全体を優先します。
      *
      * @param {string[]} categories
      * @returns {string[]}
      */
     normalizeCategories(categories) {
-      if (categories.includes('all')) {
-        return ['all'];
+      const normalized = [
+        ...new Set(
+          categories
+            .map(
+              (category) =>
+                String(
+                  category || ''
+                ).trim()
+            )
+            .filter(Boolean)
+        ),
+      ];
+
+      const result = [
+        ...normalized,
+      ];
+
+      if (
+        result.includes(
+          'boys-all'
+        )
+      ) {
+        this.removeValues(
+          result,
+          [
+            'boys-u13',
+            'boys-u14',
+            'boys-u15',
+          ]
+        );
       }
 
-      return [...new Set(categories)];
+      if (
+        result.includes(
+          'girls-all'
+        )
+      ) {
+        this.removeValues(
+          result,
+          [
+            'girls-u13',
+            'girls-u14',
+            'girls-u15',
+          ]
+        );
+      }
+
+      return result;
+    },
+
+    /**
+     * 配列から指定値を削除します。
+     *
+     * @param {string[]} target
+     * @param {string[]} values
+     */
+    removeValues(
+      target,
+      values
+    ) {
+      values.forEach(
+        (value) => {
+          const index =
+            target.indexOf(
+              value
+            );
+
+          if (index !== -1) {
+            target.splice(
+              index,
+              1
+            );
+          }
+        }
+      );
     },
 
     /**
@@ -408,7 +782,11 @@
      * @param {string} errorId
      * @param {string} message
      */
-    setFieldError(input, errorId, message) {
+    setFieldError(
+      input,
+      errorId,
+      message
+    ) {
       if (input) {
         input.setAttribute(
           'aria-invalid',
@@ -416,7 +794,10 @@
         );
       }
 
-      this.showError(errorId, message);
+      this.showError(
+        errorId,
+        message
+      );
     },
 
     /**
@@ -425,16 +806,24 @@
      * @param {string} errorId
      * @param {string} message
      */
-    showError(errorId, message) {
+    showError(
+      errorId,
+      message
+    ) {
       const errorElement =
-        document.getElementById(errorId);
+        document.getElementById(
+          errorId
+        );
 
       if (!errorElement) {
         return;
       }
 
-      errorElement.textContent = message;
-      errorElement.hidden = false;
+      errorElement.textContent =
+        message;
+
+      errorElement.hidden =
+        false;
     },
 
     /**
@@ -443,10 +832,14 @@
      * @param {HTMLElement} input
      */
     clearFieldError(input) {
-      input.removeAttribute('aria-invalid');
+      input.removeAttribute(
+        'aria-invalid'
+      );
 
       const field =
-        input.closest('.form-field');
+        input.closest(
+          '.form-field'
+        );
 
       if (!field) {
         return;
@@ -457,10 +850,15 @@
           '.form-field__error'
         );
 
-      errorElements.forEach((element) => {
-        element.hidden = true;
-        element.textContent = '';
-      });
+      errorElements.forEach(
+        (element) => {
+          element.hidden =
+            true;
+
+          element.textContent =
+            '';
+        }
+      );
     },
 
     /**
@@ -476,34 +874,107 @@
         return;
       }
 
-      errorElement.hidden = true;
-      errorElement.textContent = '';
+      errorElement.hidden =
+        true;
+
+      errorElement.textContent =
+        '';
+    },
+
+    /**
+     * 複数日エラーを解除します。
+     */
+    clearMultipleDatesError() {
+      const errorElement =
+        document.getElementById(
+          'schedule-multiple-dates-error'
+        );
+
+      if (errorElement) {
+        errorElement.hidden =
+          true;
+
+        errorElement.textContent =
+          '';
+      }
+
+      this.form
+        .querySelectorAll(
+          'input[name="multipleDates"]'
+        )
+        .forEach(
+          (input) => {
+            input.removeAttribute(
+              'aria-invalid'
+            );
+          }
+        );
+    },
+
+    /**
+     * 単一日・複数日のエラーを解除します。
+     */
+    clearDateErrors() {
+      const singleDateError =
+        document.getElementById(
+          'schedule-date-error'
+        );
+
+      if (singleDateError) {
+        singleDateError.hidden =
+          true;
+
+        singleDateError.textContent =
+          '';
+      }
+
+      const dateInput =
+        document.getElementById(
+          'schedule-date'
+        );
+
+      dateInput?.removeAttribute(
+        'aria-invalid'
+      );
+
+      this.clearMultipleDatesError();
     },
 
     /**
      * フォーム内の全エラーを解除します。
      */
     clearAllErrors() {
+      if (!this.form) {
+        return;
+      }
+
       const invalidElements =
         this.form.querySelectorAll(
           '[aria-invalid="true"]'
         );
 
-      invalidElements.forEach((element) => {
-        element.removeAttribute(
-          'aria-invalid'
-        );
-      });
+      invalidElements.forEach(
+        (element) => {
+          element.removeAttribute(
+            'aria-invalid'
+          );
+        }
+      );
 
       const errorElements =
         this.form.querySelectorAll(
           '.form-field__error'
         );
 
-      errorElements.forEach((element) => {
-        element.hidden = true;
-        element.textContent = '';
-      });
+      errorElements.forEach(
+        (element) => {
+          element.hidden =
+            true;
+
+          element.textContent =
+            '';
+        }
+      );
     },
 
     /**
@@ -514,7 +985,11 @@
      */
     isValidDateString(value) {
       if (
-        !/^\d{4}-\d{2}-\d{2}$/.test(value)
+        typeof value !==
+          'string' ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(
+          value
+        )
       ) {
         return false;
       }
@@ -528,12 +1003,63 @@
         .map(Number);
 
       const date =
-        new Date(year, month - 1, day);
+        new Date(
+          year,
+          month - 1,
+          day
+        );
 
       return (
-        date.getFullYear() === year &&
-        date.getMonth() === month - 1 &&
-        date.getDate() === day
+        date.getFullYear() ===
+          year &&
+        date.getMonth() ===
+          month - 1 &&
+        date.getDate() ===
+          day
+      );
+    },
+
+    /**
+     * datetime-local形式を確認します。
+     *
+     * @param {string} value
+     * @returns {boolean}
+     */
+    isValidDateTimeLocal(value) {
+      if (
+        typeof value !==
+          'string' ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
+          .test(value)
+      ) {
+        return false;
+      }
+
+      const [
+        datePart,
+        timePart,
+      ] = value.split('T');
+
+      if (
+        !this.isValidDateString(
+          datePart
+        )
+      ) {
+        return false;
+      }
+
+      const [
+        hours,
+        minutes,
+      ] = timePart
+        .split(':')
+        .map(Number);
+
+      return (
+        hours >= 0 &&
+        hours <= 23 &&
+        minutes >= 0 &&
+        minutes <= 59
       );
     },
 
@@ -545,11 +1071,14 @@
      */
     isValidHttpUrl(value) {
       try {
-        const url = new URL(value);
+        const url =
+          new URL(value);
 
         return (
-          url.protocol === 'http:' ||
-          url.protocol === 'https:'
+          url.protocol ===
+            'http:' ||
+          url.protocol ===
+            'https:'
         );
       } catch (error) {
         return false;
@@ -557,7 +1086,8 @@
     },
   };
 
-  window.NinjaValidation = Validation;
+  window.NinjaValidation =
+    Validation;
 
   document.addEventListener(
     'DOMContentLoaded',

@@ -131,7 +131,6 @@
 
       <section
         class="calendar-section"
-        id="calendar-section"
         aria-labelledby="calendar-heading"
       >
         <div class="section-header">
@@ -207,14 +206,11 @@
             name="category"
           >
             <option value="all">すべて</option>
-            <option value="boys-all">男子全体</option>
-            <option value="girls-all">女子全体</option>
-            <option value="boys-u13">男子U13</option>
-            <option value="girls-u13">女子U13</option>
-            <option value="boys-u14">男子U14</option>
-            <option value="girls-u14">女子U14</option>
-            <option value="boys-u15">男子U15</option>
-            <option value="girls-u15">女子U15</option>
+            <option value="boys">男子</option>
+            <option value="girls">女子</option>
+            <option value="u13">U13</option>
+            <option value="u14">U14</option>
+            <option value="u15">U15</option>
           </select>
         </div>
 
@@ -286,7 +282,6 @@
 
       <section
         class="dashboard-section"
-        id="today-section"
         aria-labelledby="today-heading"
       >
         <div class="section-header">
@@ -313,7 +308,6 @@
 
       <section
         class="dashboard-section"
-        id="attendance-section"
         aria-labelledby="attendance-heading"
       >
         <div class="section-header">
@@ -395,7 +389,7 @@
             class="icon-button"
             id="close-schedule-dialog-button"
             type="button"
-            aria-label="予定画面を閉じる"
+            aria-label="予定追加画面を閉じる"
           >
             ×
           </button>
@@ -413,9 +407,7 @@
             <fieldset class="form-field">
               <legend>
                 予定種別
-                <span class="form-field__required">
-                  必須
-                </span>
+                <span class="form-field__required">必須</span>
               </legend>
 
               <div class="radio-group">
@@ -427,7 +419,7 @@
                     checked
                     required
                   >
-                  <span>🏀 練習</span>
+                  <span>練習</span>
                 </label>
 
                 <label class="radio-option">
@@ -437,7 +429,7 @@
                     value="game"
                     required
                   >
-                  <span>🏆 試合</span>
+                  <span>試合</span>
                 </label>
 
                 <label class="radio-option">
@@ -447,7 +439,7 @@
                     value="trip"
                     required
                   >
-                  <span>🚐 遠征</span>
+                  <span>遠征</span>
                 </label>
 
                 <label class="radio-option">
@@ -457,7 +449,7 @@
                     value="off"
                     required
                   >
-                  <span>❌ OFF</span>
+                  <span>OFF</span>
                 </label>
               </div>
 
@@ -471,15 +463,10 @@
             <fieldset class="form-field">
               <legend>
                 対象カテゴリー
-                <span class="form-field__required">
-                  必須
-                </span>
+                <span class="form-field__required">必須</span>
               </legend>
 
-              <div
-                class="checkbox-group"
-                id="schedule-category-options"
-              >
+              <div class="checkbox-group">
                 <label class="checkbox-option">
                   <input
                     name="categories"
@@ -554,7 +541,7 @@
               </div>
 
               <p class="form-field__help">
-                左列が男子、右列が女子です。複数選択できます。
+                複数選択できます。
               </p>
 
               <p
@@ -567,9 +554,7 @@
             <div class="form-field">
               <label for="schedule-title">
                 タイトル
-                <span class="form-field__required">
-                  必須
-                </span>
+                <span class="form-field__required">必須</span>
               </label>
 
               <input
@@ -589,12 +574,50 @@
               ></p>
             </div>
 
-            <div class="form-field">
+            <fieldset
+              class="form-field"
+              id="schedule-date-mode-field"
+            >
+              <legend>
+                登録方法
+                <span class="form-field__required">必須</span>
+              </legend>
+
+              <div class="radio-group">
+                <label class="radio-option">
+                  <input
+                    id="schedule-date-mode-single"
+                    name="dateMode"
+                    type="radio"
+                    value="single"
+                    checked
+                  >
+                  <span>1日だけ登録</span>
+                </label>
+
+                <label class="radio-option">
+                  <input
+                    id="schedule-date-mode-multiple"
+                    name="dateMode"
+                    type="radio"
+                    value="multiple"
+                  >
+                  <span>複数日をまとめて登録</span>
+                </label>
+              </div>
+
+              <p class="form-field__help">
+                編集時は1件ずつ変更します。
+              </p>
+            </fieldset>
+
+            <div
+              class="form-field"
+              id="schedule-single-date-field"
+            >
               <label for="schedule-date">
                 日付
-                <span class="form-field__required">
-                  必須
-                </span>
+                <span class="form-field__required">必須</span>
               </label>
 
               <input
@@ -610,6 +633,57 @@
                 hidden
               ></p>
             </div>
+
+            <fieldset
+              class="form-field"
+              id="schedule-multiple-date-field"
+              hidden
+            >
+              <legend>
+                登録する日付
+                <span class="form-field__required">必須</span>
+              </legend>
+
+              <div
+                id="schedule-multiple-dates-list"
+                aria-live="polite"
+              >
+                <div
+                  class="form-grid form-grid--two-columns"
+                  data-multiple-date-row
+                >
+                  <div class="form-field">
+                    <label for="schedule-multiple-date-1">
+                      日付1
+                    </label>
+
+                    <input
+                      id="schedule-multiple-date-1"
+                      name="multipleDates"
+                      type="date"
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <button
+                class="button button--secondary"
+                id="add-schedule-date-button"
+                type="button"
+              >
+                ＋ 日付を追加
+              </button>
+
+              <p class="form-field__help">
+                同じ内容の予定を、選択した日付すべてに登録します。
+              </p>
+
+              <p
+                class="form-field__error"
+                id="schedule-multiple-dates-error"
+                hidden
+              ></p>
+            </fieldset>
 
             <div class="form-field">
               <label class="checkbox-option">
@@ -674,12 +748,6 @@
                 name="meetingTime"
                 type="time"
               >
-
-              <p
-                class="form-field__error"
-                id="schedule-meeting-time-error"
-                hidden
-              ></p>
             </div>
 
             <div class="form-field">
@@ -729,12 +797,6 @@
                 name="attendanceDeadline"
                 type="datetime-local"
               >
-
-              <p
-                class="form-field__error"
-                id="schedule-attendance-deadline-error"
-                hidden
-              ></p>
             </div>
 
             <div class="form-field">
@@ -783,9 +845,7 @@
             <div class="form-field">
               <label for="schedule-status">
                 公開状態
-                <span class="form-field__required">
-                  必須
-                </span>
+                <span class="form-field__required">必須</span>
               </label>
 
               <select
@@ -812,89 +872,26 @@
               <p id="schedule-form-status-message"></p>
             </div>
           </div>
-
-          <footer class="form-actions">
-            <button
-              class="button button--secondary"
-              id="cancel-schedule-button"
-              type="button"
-            >
-              キャンセル
-            </button>
-
-            <button
-              class="button button--primary"
-              id="save-schedule-button"
-              type="submit"
-            >
-              予定を保存
-            </button>
-          </footer>
         </div>
-      </form>
-    </dialog>
 
-    <dialog
-      class="modal"
-      id="schedule-detail-dialog"
-      aria-labelledby="schedule-detail-title"
-    >
-      <article class="modal__content">
-        <header class="modal__header">
-          <div>
-            <p class="modal__label">
-              予定詳細
-            </p>
-
-            <h2 id="schedule-detail-title">
-              予定
-            </h2>
-          </div>
+        <footer class="form-actions">
+          <button
+            class="button button--secondary"
+            id="cancel-schedule-button"
+            type="button"
+          >
+            キャンセル
+          </button>
 
           <button
-            class="icon-button"
-            id="close-schedule-detail-button"
-            type="button"
-            aria-label="予定詳細を閉じる"
+            class="button button--primary"
+            id="save-schedule-button"
+            type="submit"
           >
-            ×
+            予定を保存
           </button>
-        </header>
-
-        <div class="modal__body">
-          <div id="schedule-detail-content">
-            <p class="empty-message">
-              予定を読み込んでいます。
-            </p>
-          </div>
-
-          <footer class="form-actions">
-            <button
-              class="button button--danger"
-              id="delete-schedule-button"
-              type="button"
-            >
-              削除
-            </button>
-
-            <button
-              class="button button--secondary"
-              id="copy-schedule-button"
-              type="button"
-            >
-              複写
-            </button>
-
-            <button
-              class="button button--primary"
-              id="edit-schedule-button"
-              type="button"
-            >
-              編集
-            </button>
-          </footer>
-        </div>
-      </article>
+        </footer>
+      </form>
     </dialog>
 
     <noscript>

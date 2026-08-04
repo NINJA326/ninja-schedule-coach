@@ -4,7 +4,7 @@
  * NINJA SCHEDULE
  * ui.js
  *
- * メニュー、予定フォーム、予定詳細、
+ * メニュー、予定フォーム、複数日入力、予定詳細、
  * 編集、削除、複写などの画面操作を管理します。
  */
 
@@ -34,6 +34,8 @@
 
   const UI = {
     selectedScheduleId: '',
+    isDeletingSchedule: false,
+    multipleDateSequence: 1,
 
     elements: {
       menuButton: null,
@@ -54,6 +56,13 @@
       scheduleMeetingTime: null,
       scheduleTimeFields: null,
 
+      dateModeSingle: null,
+      dateModeMultiple: null,
+      singleDateField: null,
+      multipleDateField: null,
+      multipleDatesList: null,
+      addScheduleDateButton: null,
+
       scheduleFormStatus: null,
       scheduleFormStatusMessage: null,
 
@@ -70,6 +79,7 @@
      * UIを初期化します。
      */
     init() {
+      this.ensureScheduleDetailDialog();
       this.cacheElements();
 
       if (!this.validateRequiredElements()) {
@@ -81,26 +91,125 @@
     },
 
     /**
+     * 予定詳細ダイアログがHTMLにない場合のみ生成します。
+     *
+     * 現在のindex.htmlとの互換性を維持するための処理です。
+     */
+    ensureScheduleDetailDialog() {
+      if (
+        document.getElementById(
+          'schedule-detail-dialog'
+        )
+      ) {
+        return;
+      }
+
+      const dialog =
+        document.createElement('dialog');
+
+      dialog.id =
+        'schedule-detail-dialog';
+
+      dialog.className =
+        'modal';
+
+      dialog.setAttribute(
+        'aria-labelledby',
+        'schedule-detail-title'
+      );
+
+      dialog.innerHTML = `
+        <section class="modal__content">
+          <header class="modal__header">
+            <div>
+              <p class="modal__label">
+                予定詳細
+              </p>
+
+              <h2 id="schedule-detail-title">
+                予定
+              </h2>
+            </div>
+
+            <button
+              class="icon-button"
+              id="close-schedule-detail-button"
+              type="button"
+              aria-label="予定詳細を閉じる"
+            >
+              ×
+            </button>
+          </header>
+
+          <div
+            class="modal__body"
+            id="schedule-detail-content"
+          ></div>
+
+          <footer class="form-actions">
+            <button
+              class="button button--danger"
+              id="delete-schedule-button"
+              type="button"
+            >
+              削除
+            </button>
+
+            <button
+              class="button button--secondary"
+              id="copy-schedule-button"
+              type="button"
+            >
+              複写
+            </button>
+
+            <button
+              class="button button--primary"
+              id="edit-schedule-button"
+              type="button"
+            >
+              編集
+            </button>
+          </footer>
+        </section>
+      `;
+
+      document.body.appendChild(dialog);
+    },
+
+    /**
      * 使用するHTML要素を取得します。
      */
     cacheElements() {
       this.elements.menuButton =
-        document.getElementById('menu-button');
+        document.getElementById(
+          'menu-button'
+        );
 
       this.elements.appMenu =
-        document.getElementById('app-menu');
+        document.getElementById(
+          'app-menu'
+        );
 
       this.elements.addScheduleButton =
-        document.getElementById('add-schedule-button');
+        document.getElementById(
+          'add-schedule-button'
+        );
 
       this.elements.scheduleDialog =
-        document.getElementById('schedule-dialog');
+        document.getElementById(
+          'schedule-dialog'
+        );
 
       this.elements.scheduleForm =
-        document.getElementById('schedule-form');
+        document.getElementById(
+          'schedule-form'
+        );
 
       this.elements.scheduleDialogTitle =
-        document.getElementById('schedule-dialog-title');
+        document.getElementById(
+          'schedule-dialog-title'
+        );
 
       this.elements.closeScheduleDialogButton =
         document.getElementById(
@@ -113,28 +222,74 @@
         );
 
       this.elements.scheduleId =
-        document.getElementById('schedule-id');
+        document.getElementById(
+          'schedule-id'
+        );
 
       this.elements.scheduleDate =
-        document.getElementById('schedule-date');
+        document.getElementById(
+          'schedule-date'
+        );
 
       this.elements.scheduleAllDay =
-        document.getElementById('schedule-all-day');
+        document.getElementById(
+          'schedule-all-day'
+        );
 
       this.elements.scheduleStartTime =
-        document.getElementById('schedule-start-time');
+        document.getElementById(
+          'schedule-start-time'
+        );
 
       this.elements.scheduleEndTime =
-        document.getElementById('schedule-end-time');
+        document.getElementById(
+          'schedule-end-time'
+        );
 
       this.elements.scheduleMeetingTime =
-        document.getElementById('schedule-meeting-time');
+        document.getElementById(
+          'schedule-meeting-time'
+        );
 
       this.elements.scheduleTimeFields =
-        document.getElementById('schedule-time-fields');
+        document.getElementById(
+          'schedule-time-fields'
+        );
+
+      this.elements.dateModeSingle =
+        document.getElementById(
+          'schedule-date-mode-single'
+        );
+
+      this.elements.dateModeMultiple =
+        document.getElementById(
+          'schedule-date-mode-multiple'
+        );
+
+      this.elements.singleDateField =
+        document.getElementById(
+          'schedule-single-date-field'
+        );
+
+      this.elements.multipleDateField =
+        document.getElementById(
+          'schedule-multiple-date-field'
+        );
+
+      this.elements.multipleDatesList =
+        document.getElementById(
+          'schedule-multiple-dates-list'
+        );
+
+      this.elements.addScheduleDateButton =
+        document.getElementById(
+          'add-schedule-date-button'
+        );
 
       this.elements.scheduleFormStatus =
-        document.getElementById('schedule-form-status');
+        document.getElementById(
+          'schedule-form-status'
+        );
 
       this.elements.scheduleFormStatusMessage =
         document.getElementById(
@@ -198,6 +353,14 @@
         this.elements.scheduleEndTime,
         this.elements.scheduleMeetingTime,
         this.elements.scheduleTimeFields,
+
+        this.elements.dateModeSingle,
+        this.elements.dateModeMultiple,
+        this.elements.singleDateField,
+        this.elements.multipleDateField,
+        this.elements.multipleDatesList,
+        this.elements.addScheduleDateButton,
+
         this.elements.scheduleDetailDialog,
         this.elements.scheduleDetailTitle,
         this.elements.scheduleDetailContent,
@@ -207,13 +370,19 @@
         this.elements.deleteScheduleButton,
       ];
 
-      const isValid = requiredElements.every(
-        (element) => element !== null
-      );
+      const isValid =
+        requiredElements.every(
+          (element) =>
+            element !== null
+        );
 
       if (!isValid) {
         console.error(
-          'UIの初期化に必要なHTML要素が見つかりません。'
+          'UIの初期化に必要なHTML要素が見つかりません。',
+          {
+            elements:
+              this.elements,
+          }
         );
       }
 
@@ -238,26 +407,75 @@
         }
       );
 
-      this.elements.closeScheduleDialogButton.addEventListener(
-        'click',
-        () => {
-          this.closeScheduleDialog();
-        }
-      );
+      this.elements.closeScheduleDialogButton
+        .addEventListener(
+          'click',
+          () => {
+            this.closeScheduleDialog();
+          }
+        );
 
-      this.elements.cancelScheduleButton.addEventListener(
-        'click',
-        () => {
-          this.closeScheduleDialog();
-        }
-      );
+      this.elements.cancelScheduleButton
+        .addEventListener(
+          'click',
+          () => {
+            this.closeScheduleDialog();
+          }
+        );
 
-      this.elements.scheduleAllDay.addEventListener(
+      this.elements.scheduleAllDay
+        .addEventListener(
+          'change',
+          () => {
+            this.updateAllDayState();
+          }
+        );
+
+      this.elements.dateModeSingle.addEventListener(
         'change',
         () => {
-          this.updateAllDayState();
+          this.updateDateModeState();
         }
       );
+
+      this.elements.dateModeMultiple.addEventListener(
+        'change',
+        () => {
+          this.updateDateModeState();
+        }
+      );
+
+      this.elements.addScheduleDateButton
+        .addEventListener(
+          'click',
+          () => {
+            this.addMultipleDateRow();
+          }
+        );
+
+      this.elements.multipleDatesList
+        .addEventListener(
+          'click',
+          (event) => {
+            const removeButton =
+              event.target.closest(
+                '[data-remove-multiple-date]'
+              );
+
+            if (!removeButton) {
+              return;
+            }
+
+            const row =
+              removeButton.closest(
+                '[data-multiple-date-row]'
+              );
+
+            this.removeMultipleDateRow(
+              row
+            );
+          }
+        );
 
       this.elements.scheduleDialog.addEventListener(
         'click',
@@ -323,12 +541,13 @@
         }
       );
 
-      this.elements.deleteScheduleButton.addEventListener(
-        'click',
-        () => {
-          this.deleteSelectedSchedule();
-        }
-      );
+      this.elements.deleteScheduleButton
+        .addEventListener(
+          'click',
+          () => {
+            this.deleteSelectedSchedule();
+          }
+        );
 
       document.addEventListener(
         'keydown',
@@ -347,7 +566,10 @@
      * フォームの初期状態を設定します。
      */
     initializeFormState() {
+      this.setDateMode('single');
+      this.resetMultipleDateRows();
       this.setDefaultDate();
+      this.updateDateModeState();
       this.updateAllDayState();
       this.hideFormStatus();
     },
@@ -372,7 +594,8 @@
      * メニューを閉じます。
      */
     closeMenu() {
-      this.elements.appMenu.hidden = true;
+      this.elements.appMenu.hidden =
+        true;
 
       this.elements.menuButton.setAttribute(
         'aria-expanded',
@@ -383,7 +606,7 @@
     /**
      * 新規予定フォームを開きます。
      *
-     * @param {string} initialDate 初期表示日
+     * @param {string} initialDate
      */
     openScheduleDialog(initialDate = '') {
       this.resetScheduleForm();
@@ -391,19 +614,26 @@
       this.elements.scheduleDialogTitle.textContent =
         '予定追加';
 
+      this.setDateMode('single');
+
       if (
         initialDate &&
         this.isValidDateKey(initialDate)
       ) {
         this.elements.scheduleDate.value =
           initialDate;
+
+        this.setFirstMultipleDate(
+          initialDate
+        );
       }
 
+      this.updateDateModeState();
       this.closeMenu();
 
       if (
-        typeof this.elements.scheduleDialog.showModal !==
-        'function'
+        typeof this.elements.scheduleDialog
+          .showModal !== 'function'
       ) {
         console.error(
           'このブラウザはdialog要素に対応していません。'
@@ -414,16 +644,17 @@
 
       this.elements.scheduleDialog.showModal();
 
-      window.requestAnimationFrame(() => {
-        const firstInput =
-          this.elements.scheduleForm.querySelector(
-            'input[name="scheduleType"]'
-          );
+      window.requestAnimationFrame(
+        () => {
+          const firstInput =
+            this.elements.scheduleForm
+              .querySelector(
+                'input[name="scheduleType"]'
+              );
 
-        if (firstInput) {
-          firstInput.focus();
+          firstInput?.focus();
         }
-      });
+      );
     },
 
     /**
@@ -437,7 +668,15 @@
       }
 
       this.resetScheduleForm();
-      this.populateScheduleForm(schedule);
+      this.populateScheduleForm(
+        schedule
+      );
+
+      this.setDateMode('single');
+      this.disableMultipleDateMode(
+        true
+      );
+      this.updateDateModeState();
 
       this.elements.scheduleDialogTitle.textContent =
         '予定編集';
@@ -445,8 +684,8 @@
       this.closeScheduleDetail();
 
       if (
-        typeof this.elements.scheduleDialog.showModal ===
-        'function'
+        typeof this.elements.scheduleDialog
+          .showModal === 'function'
       ) {
         this.elements.scheduleDialog.showModal();
       }
@@ -465,11 +704,23 @@
       const copiedSchedule = {
         ...schedule,
         id: '',
-        title: `${schedule.title}（複写）`,
+        title:
+          `${schedule.title}（複写）`,
       };
 
       this.resetScheduleForm();
-      this.populateScheduleForm(copiedSchedule);
+      this.populateScheduleForm(
+        copiedSchedule
+      );
+
+      this.disableMultipleDateMode(
+        false
+      );
+      this.setDateMode('single');
+      this.setFirstMultipleDate(
+        schedule.date
+      );
+      this.updateDateModeState();
 
       this.elements.scheduleDialogTitle.textContent =
         '予定複写';
@@ -477,8 +728,8 @@
       this.closeScheduleDetail();
 
       if (
-        typeof this.elements.scheduleDialog.showModal ===
-        'function'
+        typeof this.elements.scheduleDialog
+          .showModal === 'function'
       ) {
         this.elements.scheduleDialog.showModal();
       }
@@ -488,7 +739,9 @@
      * 予定フォームを閉じます。
      */
     closeScheduleDialog() {
-      if (this.elements.scheduleDialog.open) {
+      if (
+        this.elements.scheduleDialog.open
+      ) {
         this.elements.scheduleDialog.close();
       }
 
@@ -502,29 +755,414 @@
       this.elements.scheduleForm.reset();
 
       if (this.elements.scheduleId) {
-        this.elements.scheduleId.value = '';
+        this.elements.scheduleId.value =
+          '';
       }
 
       const practiceRadio =
-        this.elements.scheduleForm.querySelector(
-          'input[name="scheduleType"][value="practice"]'
-        );
+        this.elements.scheduleForm
+          .querySelector(
+            'input[name="scheduleType"][value="practice"]'
+          );
 
       if (practiceRadio) {
-        practiceRadio.checked = true;
+        practiceRadio.checked =
+          true;
       }
 
       const publishedStatus =
-        document.getElementById('schedule-status');
+        document.getElementById(
+          'schedule-status'
+        );
 
       if (publishedStatus) {
-        publishedStatus.value = 'published';
+        publishedStatus.value =
+          'published';
       }
 
+      this.disableMultipleDateMode(
+        false
+      );
+      this.setDateMode('single');
+      this.resetMultipleDateRows();
       this.setDefaultDate();
       this.clearValidationErrors();
       this.hideFormStatus();
+      this.updateDateModeState();
       this.updateAllDayState();
+    },
+
+    /**
+     * 日付登録方法を設定します。
+     *
+     * @param {'single'|'multiple'} mode
+     */
+    setDateMode(mode) {
+      const isMultiple =
+        mode === 'multiple';
+
+      this.elements.dateModeSingle.checked =
+        !isMultiple;
+
+      this.elements.dateModeMultiple.checked =
+        isMultiple;
+    },
+
+    /**
+     * 編集中の複数日選択可否を設定します。
+     *
+     * @param {boolean} disabled
+     */
+    disableMultipleDateMode(disabled) {
+      this.elements.dateModeMultiple.disabled =
+        disabled;
+
+      const option =
+        this.elements.dateModeMultiple.closest(
+          '.radio-option'
+        );
+
+      if (option) {
+        option.style.opacity =
+          disabled
+            ? '0.55'
+            : '1';
+      }
+    },
+
+    /**
+     * 日付登録方法に応じて入力欄を切り替えます。
+     */
+    updateDateModeState() {
+      const isMultiple =
+        this.elements.dateModeMultiple.checked &&
+        !this.elements.dateModeMultiple.disabled;
+
+      this.elements.singleDateField.hidden =
+        isMultiple;
+
+      this.elements.multipleDateField.hidden =
+        !isMultiple;
+
+      this.elements.scheduleDate.required =
+        !isMultiple;
+
+      this.elements.scheduleDate.disabled =
+        isMultiple;
+
+      this.getMultipleDateInputs()
+        .forEach((input, index) => {
+          input.disabled =
+            !isMultiple;
+
+          input.required =
+            isMultiple &&
+            index === 0;
+        });
+
+      if (isMultiple) {
+        const firstDate =
+          this.getMultipleDateInputs()[0];
+
+        if (
+          firstDate &&
+          !firstDate.value &&
+          this.elements.scheduleDate.value
+        ) {
+          firstDate.value =
+            this.elements.scheduleDate.value;
+        }
+      }
+    },
+
+    /**
+     * 複数日入力欄を初期化します。
+     */
+    resetMultipleDateRows() {
+      this.multipleDateSequence =
+        1;
+
+      this.elements.multipleDatesList
+        .innerHTML = '';
+
+      this.elements.multipleDatesList
+        .appendChild(
+          this.createMultipleDateRow(
+            '',
+            false
+          )
+        );
+    },
+
+    /**
+     * 複数日入力欄を追加します。
+     *
+     * @param {string} value
+     */
+    addMultipleDateRow(value = '') {
+      const row =
+        this.createMultipleDateRow(
+          value,
+          true
+        );
+
+      this.elements.multipleDatesList
+        .appendChild(row);
+
+      this.updateMultipleDateLabels();
+      this.updateDateModeState();
+
+      const input =
+        row.querySelector(
+          'input[name="multipleDates"]'
+        );
+
+      input?.focus();
+    },
+
+    /**
+     * 複数日入力欄を生成します。
+     *
+     * @param {string} value
+     * @param {boolean} removable
+     * @returns {HTMLDivElement}
+     */
+    createMultipleDateRow(
+      value = '',
+      removable = true
+    ) {
+      this.multipleDateSequence +=
+        this.elements.multipleDatesList
+          .children.length === 0
+          ? 0
+          : 1;
+
+      const inputId =
+        `schedule-multiple-date-${this.multipleDateSequence}`;
+
+      const row =
+        document.createElement('div');
+
+      row.className =
+        'form-grid form-grid--two-columns';
+
+      row.dataset.multipleDateRow =
+        '';
+
+      const field =
+        document.createElement('div');
+
+      field.className =
+        'form-field';
+
+      const label =
+        document.createElement('label');
+
+      label.htmlFor =
+        inputId;
+
+      label.textContent =
+        '日付';
+
+      const input =
+        document.createElement('input');
+
+      input.id =
+        inputId;
+
+      input.name =
+        'multipleDates';
+
+      input.type =
+        'date';
+
+      input.value =
+        this.isValidDateKey(value)
+          ? value
+          : '';
+
+      field.appendChild(label);
+      field.appendChild(input);
+      row.appendChild(field);
+
+      const actionField =
+        document.createElement('div');
+
+      actionField.className =
+        'form-field';
+
+      if (removable) {
+        const removeButton =
+          document.createElement('button');
+
+        removeButton.type =
+          'button';
+
+        removeButton.className =
+          'button button--secondary';
+
+        removeButton.dataset.removeMultipleDate =
+          '';
+
+        removeButton.textContent =
+          'この日付を削除';
+
+        actionField.appendChild(
+          removeButton
+        );
+      }
+
+      row.appendChild(actionField);
+
+      return row;
+    },
+
+    /**
+     * 複数日入力欄を削除します。
+     *
+     * @param {HTMLElement|null} row
+     */
+    removeMultipleDateRow(row) {
+      if (!row) {
+        return;
+      }
+
+      const rows =
+        this.elements.multipleDatesList
+          .querySelectorAll(
+            '[data-multiple-date-row]'
+          );
+
+      if (rows.length <= 1) {
+        const input =
+          row.querySelector(
+            'input[name="multipleDates"]'
+          );
+
+        if (input) {
+          input.value =
+            '';
+        }
+
+        return;
+      }
+
+      row.remove();
+      this.updateMultipleDateLabels();
+      this.updateDateModeState();
+    },
+
+    /**
+     * 複数日入力欄の表示番号を更新します。
+     */
+    updateMultipleDateLabels() {
+      const rows =
+        this.elements.multipleDatesList
+          .querySelectorAll(
+            '[data-multiple-date-row]'
+          );
+
+      rows.forEach(
+        (row, index) => {
+          const input =
+            row.querySelector(
+              'input[name="multipleDates"]'
+            );
+
+          const label =
+            row.querySelector(
+              'label'
+            );
+
+          if (!input || !label) {
+            return;
+          }
+
+          const number =
+            index + 1;
+
+          input.id =
+            `schedule-multiple-date-${number}`;
+
+          label.htmlFor =
+            input.id;
+
+          label.textContent =
+            `日付${number}`;
+        }
+      );
+    },
+
+    /**
+     * 最初の複数日入力欄へ日付を設定します。
+     *
+     * @param {string} date
+     */
+    setFirstMultipleDate(date) {
+      if (
+        !this.isValidDateKey(date)
+      ) {
+        return;
+      }
+
+      const firstInput =
+        this.getMultipleDateInputs()[0];
+
+      if (firstInput) {
+        firstInput.value =
+          date;
+      }
+    },
+
+    /**
+     * 複数日入力欄を取得します。
+     *
+     * @returns {HTMLInputElement[]}
+     */
+    getMultipleDateInputs() {
+      return Array.from(
+        this.elements.multipleDatesList
+          .querySelectorAll(
+            'input[name="multipleDates"]'
+          )
+      );
+    },
+
+    /**
+     * 入力された複数日を取得します。
+     *
+     * 空欄と重複日付は除外します。
+     *
+     * @returns {string[]}
+     */
+    getSelectedMultipleDates() {
+      return [
+        ...new Set(
+          this.getMultipleDateInputs()
+            .map((input) =>
+              String(
+                input.value || ''
+              ).trim()
+            )
+            .filter((date) =>
+              this.isValidDateKey(
+                date
+              )
+            )
+        ),
+      ].sort();
+    },
+
+    /**
+     * 現在の登録方法を取得します。
+     *
+     * @returns {'single'|'multiple'}
+     */
+    getDateMode() {
+      return this.elements.dateModeMultiple.checked &&
+        !this.elements.dateModeMultiple.disabled
+        ? 'multiple'
+        : 'single';
     },
 
     /**
@@ -539,16 +1177,20 @@
       );
 
       const scheduleTypeInput =
-        this.elements.scheduleForm.querySelector(
-          `input[name="scheduleType"][value="${schedule.scheduleType}"]`
-        );
+        this.elements.scheduleForm
+          .querySelector(
+            `input[name="scheduleType"][value="${schedule.scheduleType}"]`
+          );
 
       if (scheduleTypeInput) {
-        scheduleTypeInput.checked = true;
+        scheduleTypeInput.checked =
+          true;
       }
 
       const selectedCategories =
-        Array.isArray(schedule.categories)
+        Array.isArray(
+          schedule.categories
+        )
           ? schedule.categories
           : [];
 
@@ -558,7 +1200,9 @@
         )
         .forEach((input) => {
           input.checked =
-            selectedCategories.includes(input.value);
+            selectedCategories.includes(
+              input.value
+            );
         });
 
       this.setInputValue(
@@ -571,8 +1215,14 @@
         schedule.date
       );
 
+      this.setFirstMultipleDate(
+        schedule.date
+      );
+
       this.elements.scheduleAllDay.checked =
-        Boolean(schedule.allDay);
+        Boolean(
+          schedule.allDay
+        );
 
       this.setInputValue(
         'schedule-start-time',
@@ -621,9 +1271,11 @@
 
       this.setInputValue(
         'schedule-status',
-        schedule.status || 'draft'
+        schedule.status ||
+          'draft'
       );
 
+      this.updateDateModeState();
       this.updateAllDayState();
     },
 
@@ -635,7 +1287,9 @@
      */
     setInputValue(elementId, value) {
       const element =
-        document.getElementById(elementId);
+        document.getElementById(
+          elementId
+        );
 
       if (!element) {
         return;
@@ -656,8 +1310,17 @@
         return;
       }
 
+      const today =
+        this.formatDateKey(
+          new Date()
+        );
+
       this.elements.scheduleDate.value =
-        this.formatDateKey(new Date());
+        today;
+
+      this.setFirstMultipleDate(
+        today
+      );
     },
 
     /**
@@ -673,30 +1336,41 @@
         this.elements.scheduleMeetingTime,
       ];
 
-      timeInputs.forEach((input) => {
-        input.disabled = isAllDay;
+      timeInputs.forEach(
+        (input) => {
+          input.disabled =
+            isAllDay;
 
-        if (isAllDay) {
-          input.value = '';
+          if (isAllDay) {
+            input.value =
+              '';
+          }
         }
-      });
-
-      this.elements.scheduleTimeFields.setAttribute(
-        'aria-disabled',
-        String(isAllDay)
       );
 
-      this.elements.scheduleTimeFields.style.opacity =
-        isAllDay ? '0.55' : '1';
+      this.elements.scheduleTimeFields
+        .setAttribute(
+          'aria-disabled',
+          String(isAllDay)
+        );
+
+      this.elements.scheduleTimeFields
+        .style.opacity =
+          isAllDay
+            ? '0.55'
+            : '1';
 
       const meetingField =
-        this.elements.scheduleMeetingTime.closest(
-          '.form-field'
-        );
+        this.elements.scheduleMeetingTime
+          .closest(
+            '.form-field'
+          );
 
       if (meetingField) {
         meetingField.style.opacity =
-          isAllDay ? '0.55' : '1';
+          isAllDay
+            ? '0.55'
+            : '1';
       }
     },
 
@@ -708,16 +1382,18 @@
     openScheduleDetail(scheduleId) {
       if (
         !window.NinjaState ||
-        typeof window.NinjaState.getScheduleById !==
+        typeof window.NinjaState
+          .getScheduleById !==
           'function'
       ) {
         return;
       }
 
       const schedule =
-        window.NinjaState.getScheduleById(
-          scheduleId
-        );
+        window.NinjaState
+          .getScheduleById(
+            scheduleId
+          );
 
       if (!schedule) {
         this.showApplicationStatus(
@@ -731,13 +1407,23 @@
       this.selectedScheduleId =
         schedule.id;
 
-      this.renderScheduleDetail(schedule);
+      this.setDetailActionVisibility(
+        true
+      );
+
+      this.renderScheduleDetail(
+        schedule
+      );
 
       if (
-        typeof this.elements.scheduleDetailDialog.showModal ===
-        'function'
+        typeof this.elements
+          .scheduleDetailDialog
+          .showModal ===
+          'function'
       ) {
-        this.elements.scheduleDetailDialog.showModal();
+        this.elements
+          .scheduleDetailDialog
+          .showModal();
       }
     },
 
@@ -754,7 +1440,9 @@
         '';
 
       const detailList =
-        document.createElement('dl');
+        document.createElement(
+          'dl'
+        );
 
       detailList.className =
         'schedule-detail-list';
@@ -816,7 +1504,9 @@
         );
       }
 
-      if (schedule.attendanceDeadline) {
+      if (
+        schedule.attendanceDeadline
+      ) {
         this.appendDetailRow(
           detailList,
           '出欠回答締切',
@@ -856,13 +1546,15 @@
       this.appendDetailRow(
         detailList,
         '公開状態',
-        STATUS_LABELS[schedule.status] ||
+        STATUS_LABELS[
           schedule.status
+        ] || schedule.status
       );
 
-      this.elements.scheduleDetailContent.appendChild(
-        detailList
-      );
+      this.elements.scheduleDetailContent
+        .appendChild(
+          detailList
+        );
     },
 
     /**
@@ -880,18 +1572,25 @@
       multiline = false
     ) {
       const row =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
       row.className =
         'schedule-detail-list__row';
 
       const term =
-        document.createElement('dt');
+        document.createElement(
+          'dt'
+        );
 
-      term.textContent = label;
+      term.textContent =
+        label;
 
       const description =
-        document.createElement('dd');
+        document.createElement(
+          'dd'
+        );
 
       description.textContent =
         value || '未設定';
@@ -902,7 +1601,9 @@
       }
 
       row.appendChild(term);
-      row.appendChild(description);
+      row.appendChild(
+        description
+      );
       list.appendChild(row);
     },
 
@@ -921,30 +1622,51 @@
       linkText
     ) {
       const row =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
       row.className =
         'schedule-detail-list__row';
 
       const term =
-        document.createElement('dt');
+        document.createElement(
+          'dt'
+        );
 
-      term.textContent = label;
+      term.textContent =
+        label;
 
       const description =
-        document.createElement('dd');
+        document.createElement(
+          'dd'
+        );
 
       const link =
-        document.createElement('a');
+        document.createElement(
+          'a'
+        );
 
-      link.href = url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = linkText;
+      link.href =
+        url;
 
-      description.appendChild(link);
+      link.target =
+        '_blank';
+
+      link.rel =
+        'noopener noreferrer';
+
+      link.textContent =
+        linkText;
+
+      description.appendChild(
+        link
+      );
+
       row.appendChild(term);
-      row.appendChild(description);
+      row.appendChild(
+        description
+      );
       list.appendChild(row);
     },
 
@@ -953,10 +1675,30 @@
      */
     closeScheduleDetail() {
       if (
-        this.elements.scheduleDetailDialog.open
+        this.elements
+          .scheduleDetailDialog
+          .open
       ) {
-        this.elements.scheduleDetailDialog.close();
+        this.elements
+          .scheduleDetailDialog
+          .close();
       }
+    },
+
+    /**
+     * 詳細画面の操作ボタンを表示・非表示にします。
+     *
+     * @param {boolean} visible
+     */
+    setDetailActionVisibility(visible) {
+      this.elements.editScheduleButton.hidden =
+        !visible;
+
+      this.elements.copyScheduleButton.hidden =
+        !visible;
+
+      this.elements.deleteScheduleButton.hidden =
+        !visible;
     },
 
     /**
@@ -970,7 +1712,9 @@
         return;
       }
 
-      this.openScheduleEditDialog(schedule);
+      this.openScheduleEditDialog(
+        schedule
+      );
     },
 
     /**
@@ -984,144 +1728,152 @@
         return;
       }
 
-      this.openScheduleCopyDialog(schedule);
+      this.openScheduleCopyDialog(
+        schedule
+      );
     },
 
     /**
-     * 選択中の予定を削除します。
+     * 選択中の予定をGASから削除します。
+     *
+     * @returns {Promise<void>}
      */
-    /**
- * 選択中の予定をGASから削除します。
- *
- * 削除成功後はGASから予定一覧を再取得し、
- * カレンダーと今日の予定を最新状態へ更新します。
- *
- * @returns {Promise<void>}
- */
-async deleteSelectedSchedule() {
-  if (this.isDeletingSchedule) {
-    return;
-  }
+    async deleteSelectedSchedule() {
+      if (this.isDeletingSchedule) {
+        return;
+      }
 
-  const schedule =
-    this.getSelectedSchedule();
+      const schedule =
+        this.getSelectedSchedule();
 
-  if (!schedule) {
-    return;
-  }
+      if (!schedule) {
+        return;
+      }
 
-  const confirmed =
-    window.confirm(
-      `「${schedule.title}」を削除します。\n\n` +
-      'この操作は元に戻せません。'
-    );
+      const confirmed =
+        window.confirm(
+          `「${schedule.title}」を削除します。\n\n` +
+          'この操作は元に戻せません。'
+        );
 
-  if (!confirmed) {
-    return;
-  }
+      if (!confirmed) {
+        return;
+      }
 
-  if (
-    !window.NinjaApi ||
-    typeof window.NinjaApi.deleteSchedule !==
-      'function'
-  ) {
-    this.showApplicationStatus(
-      'error',
-      '削除機能を読み込めませんでした。'
-    );
+      if (
+        !window.NinjaApi ||
+        typeof window.NinjaApi
+          .deleteSchedule !==
+          'function'
+      ) {
+        this.showApplicationStatus(
+          'error',
+          '削除機能を読み込めませんでした。'
+        );
 
-    return;
-  }
+        return;
+      }
 
-  if (
-    !window.NinjaState ||
-    typeof window.NinjaState.refreshFromApi !==
-      'function'
-  ) {
-    this.showApplicationStatus(
-      'error',
-      '予定データの再取得機能を読み込めませんでした。'
-    );
+      if (
+        !window.NinjaState ||
+        typeof window.NinjaState
+          .refreshFromApi !==
+          'function'
+      ) {
+        this.showApplicationStatus(
+          'error',
+          '予定データの再取得機能を読み込めませんでした。'
+        );
 
-    return;
-  }
+        return;
+      }
 
-  this.isDeletingSchedule = true;
+      this.isDeletingSchedule =
+        true;
 
-  const originalButtonText =
-    this.elements.deleteScheduleButton.textContent;
+      const originalButtonText =
+        this.elements.deleteScheduleButton
+          .textContent;
 
-  this.elements.deleteScheduleButton.disabled =
-    true;
+      this.elements.deleteScheduleButton.disabled =
+        true;
 
-  this.elements.editScheduleButton.disabled =
-    true;
+      this.elements.editScheduleButton.disabled =
+        true;
 
-  this.elements.copyScheduleButton.disabled =
-    true;
+      this.elements.copyScheduleButton.disabled =
+        true;
 
-  this.elements.deleteScheduleButton.textContent =
-    '削除中...';
+      this.elements.deleteScheduleButton.textContent =
+        '削除中...';
 
-  try {
-    await window.NinjaApi.deleteSchedule(
-      schedule.id
-    );
+      try {
+        await window.NinjaApi
+          .deleteSchedule(
+            schedule.id
+          );
 
-    this.closeScheduleDetail();
+        this.closeScheduleDetail();
+        this.selectedScheduleId =
+          '';
 
-    this.selectedScheduleId = '';
+        await window.NinjaState
+          .refreshFromApi({
+            silent: false,
+          });
 
-    await window.NinjaState.refreshFromApi({
-      silent: false,
-    });
+        if (
+          window.NinjaApp &&
+          typeof window.NinjaApp
+            .renderApplication ===
+            'function'
+        ) {
+          window.NinjaApp
+            .renderApplication();
+        } else if (
+          window.NinjaCalendar &&
+          typeof window.NinjaCalendar
+            .render ===
+            'function'
+        ) {
+          window.NinjaCalendar
+            .render();
+        }
 
-    if (
-      window.NinjaApp &&
-      typeof window.NinjaApp.renderApplication ===
-        'function'
-    ) {
-      window.NinjaApp.renderApplication();
-    } else if (
-      window.NinjaCalendar &&
-      typeof window.NinjaCalendar.render ===
-        'function'
-    ) {
-      window.NinjaCalendar.render();
-    }
+        this.showApplicationStatus(
+          'success',
+          '予定を削除しました。'
+        );
+      } catch (error) {
+        console.error(
+          '予定の削除に失敗しました。',
+          error
+        );
 
-    this.showApplicationStatus(
-      'success',
-      '予定を削除しました。'
-    );
-  } catch (error) {
-    console.error(
-      '予定の削除に失敗しました。',
-      error
-    );
+        this.showApplicationStatus(
+          'error',
+          error instanceof Error
+            ? error.message
+            : '予定を削除できませんでした。'
+        );
+      } finally {
+        this.isDeletingSchedule =
+          false;
 
-    this.showApplicationStatus(
-      'error',
-      error instanceof Error
-        ? error.message
-        : '予定を削除できませんでした。'
-    );
-  } finally {
-    this.isDeletingSchedule = false;
+        this.elements.deleteScheduleButton.disabled =
+          false;
 
-    this.elements.deleteScheduleButton.disabled =
-      false;
+        this.elements.editScheduleButton.disabled =
+          false;
 
-    this.elements.editScheduleButton.disabled =
-      false;
+        this.elements.copyScheduleButton.disabled =
+          false;
 
-    this.elements.copyScheduleButton.disabled =
-      false;
-
-    this.elements.deleteScheduleButton.textContent =
-      originalButtonText || '削除';
-  }
-},
+        this.elements.deleteScheduleButton.textContent =
+          originalButtonText ||
+          '削除';
+      }
+    },
 
     /**
      * 選択中の予定を取得します。
@@ -1137,9 +1889,10 @@ async deleteSelectedSchedule() {
       }
 
       const schedule =
-        window.NinjaState.getScheduleById(
-          this.selectedScheduleId
-        );
+        window.NinjaState
+          .getScheduleById(
+            this.selectedScheduleId
+          );
 
       if (!schedule) {
         this.showApplicationStatus(
@@ -1156,9 +1909,6 @@ async deleteSelectedSchedule() {
     /**
      * 日別予定一覧を表示します。
      *
-     * 現段階では複数予定の選択一覧を
-     * 詳細ダイアログ内に表示します。
-     *
      * @param {string} dateKey
      * @param {Object[]} schedules
      */
@@ -1173,7 +1923,8 @@ async deleteSelectedSchedule() {
         return;
       }
 
-      this.selectedScheduleId = '';
+      this.selectedScheduleId =
+        '';
 
       this.elements.scheduleDetailTitle.textContent =
         `${this.formatJapaneseDate(dateKey)}の予定`;
@@ -1182,110 +1933,129 @@ async deleteSelectedSchedule() {
         '';
 
       const list =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
       list.className =
         'schedule-list';
 
-      schedules.forEach((schedule) => {
-        const button =
-          document.createElement('button');
+      schedules.forEach(
+        (schedule) => {
+          const button =
+            document.createElement(
+              'button'
+            );
 
-        button.type = 'button';
-        button.className =
-          'schedule-card';
+          button.type =
+            'button';
 
-        button.dataset.scheduleId =
-          schedule.id;
+          button.className =
+            'schedule-card';
 
-        const mark =
-          document.createElement('span');
+          button.dataset.scheduleId =
+            schedule.id;
 
-        mark.className =
-          'schedule-card__mark';
+          const mark =
+            document.createElement(
+              'span'
+            );
 
-        mark.dataset.scheduleType =
-          schedule.scheduleType;
+          mark.className =
+            'schedule-card__mark';
 
-        const content =
-          document.createElement('span');
+          mark.dataset.scheduleType =
+            schedule.scheduleType;
 
-        content.className =
-          'schedule-card__content';
+          const content =
+            document.createElement(
+              'span'
+            );
 
-        const title =
-          document.createElement('strong');
+          content.className =
+            'schedule-card__content';
 
-        title.className =
-          'schedule-card__title';
+          const title =
+            document.createElement(
+              'strong'
+            );
 
-        title.textContent =
-          schedule.title;
+          title.className =
+            'schedule-card__title';
 
-        const meta =
-          document.createElement('span');
+          title.textContent =
+            schedule.title;
 
-        meta.className =
-          'schedule-card__meta';
+          const meta =
+            document.createElement(
+              'span'
+            );
 
-        meta.textContent =
-          this.getScheduleTimeText(
-            schedule
+          meta.className =
+            'schedule-card__meta';
+
+          meta.textContent =
+            this.getScheduleTimeText(
+              schedule
+            );
+
+          content.appendChild(
+            title
           );
 
-        content.appendChild(title);
-        content.appendChild(meta);
+          content.appendChild(
+            meta
+          );
 
-        button.appendChild(mark);
-        button.appendChild(content);
+          button.appendChild(
+            mark
+          );
 
-        button.addEventListener(
-          'click',
-          () => {
-            this.closeScheduleDetail();
+          button.appendChild(
+            content
+          );
 
-            window.setTimeout(() => {
-              this.openScheduleDetail(
-                schedule.id
+          button.addEventListener(
+            'click',
+            () => {
+              this.closeScheduleDetail();
+
+              window.setTimeout(
+                () => {
+                  this.openScheduleDetail(
+                    schedule.id
+                  );
+                },
+                50
               );
-            }, 50);
-          }
-        );
+            }
+          );
 
-        list.appendChild(button);
-      });
-
-      this.elements.scheduleDetailContent.appendChild(
-        list
-      );
-
-      this.elements.editScheduleButton.hidden =
-        true;
-
-      this.elements.copyScheduleButton.hidden =
-        true;
-
-      this.elements.deleteScheduleButton.hidden =
-        true;
-
-      this.elements.scheduleDetailDialog.showModal();
-
-      this.elements.scheduleDetailDialog.addEventListener(
-        'close',
-        () => {
-          this.elements.editScheduleButton.hidden =
-            false;
-
-          this.elements.copyScheduleButton.hidden =
-            false;
-
-          this.elements.deleteScheduleButton.hidden =
-            false;
-        },
-        {
-          once: true,
+          list.appendChild(
+            button
+          );
         }
       );
+
+      this.elements.scheduleDetailContent
+        .appendChild(
+          list
+        );
+
+      this.setDetailActionVisibility(
+        false
+      );
+
+      if (
+        typeof this.elements
+          .scheduleDetailDialog
+          .showModal ===
+          'function'
+      ) {
+        this.elements
+          .scheduleDetailDialog
+          .showModal();
+      }
     },
 
     /**
@@ -1293,25 +2063,34 @@ async deleteSelectedSchedule() {
      */
     clearValidationErrors() {
       const errorElements =
-        this.elements.scheduleForm.querySelectorAll(
-          '.form-field__error'
-        );
+        this.elements.scheduleForm
+          .querySelectorAll(
+            '.form-field__error'
+          );
 
-      errorElements.forEach((element) => {
-        element.hidden = true;
-        element.textContent = '';
-      });
+      errorElements.forEach(
+        (element) => {
+          element.hidden =
+            true;
+
+          element.textContent =
+            '';
+        }
+      );
 
       const invalidElements =
-        this.elements.scheduleForm.querySelectorAll(
-          '[aria-invalid="true"]'
-        );
+        this.elements.scheduleForm
+          .querySelectorAll(
+            '[aria-invalid="true"]'
+          );
 
-      invalidElements.forEach((element) => {
-        element.removeAttribute(
-          'aria-invalid'
-        );
-      });
+      invalidElements.forEach(
+        (element) => {
+          element.removeAttribute(
+            'aria-invalid'
+          );
+        }
+      );
     },
 
     /**
@@ -1323,16 +2102,19 @@ async deleteSelectedSchedule() {
     showFormStatus(status, message) {
       if (
         !this.elements.scheduleFormStatus ||
-        !this.elements.scheduleFormStatusMessage
+        !this.elements
+          .scheduleFormStatusMessage
       ) {
         return;
       }
 
-      this.elements.scheduleFormStatus.dataset.status =
-        status;
+      this.elements.scheduleFormStatus
+        .dataset.status =
+          status;
 
-      this.elements.scheduleFormStatusMessage.textContent =
-        message;
+      this.elements.scheduleFormStatusMessage
+        .textContent =
+          message;
 
       this.elements.scheduleFormStatus.hidden =
         false;
@@ -1344,7 +2126,8 @@ async deleteSelectedSchedule() {
     hideFormStatus() {
       if (
         !this.elements.scheduleFormStatus ||
-        !this.elements.scheduleFormStatusMessage
+        !this.elements
+          .scheduleFormStatusMessage
       ) {
         return;
       }
@@ -1352,12 +2135,14 @@ async deleteSelectedSchedule() {
       this.elements.scheduleFormStatus.hidden =
         true;
 
-      this.elements.scheduleFormStatus.removeAttribute(
-        'data-status'
-      );
+      this.elements.scheduleFormStatus
+        .removeAttribute(
+          'data-status'
+        );
 
-      this.elements.scheduleFormStatusMessage.textContent =
-        '';
+      this.elements.scheduleFormStatusMessage
+        .textContent =
+          '';
     },
 
     /**
@@ -1369,13 +2154,15 @@ async deleteSelectedSchedule() {
     showApplicationStatus(status, message) {
       if (
         window.NinjaApp &&
-        typeof window.NinjaApp.showApplicationStatus ===
+        typeof window.NinjaApp
+          .showApplicationStatus ===
           'function'
       ) {
-        window.NinjaApp.showApplicationStatus(
-          status,
-          message
-        );
+        window.NinjaApp
+          .showApplicationStatus(
+            status,
+            message
+          );
 
         return;
       }
@@ -1394,15 +2181,18 @@ async deleteSelectedSchedule() {
      * @returns {string}
      */
     getCategoryText(categories) {
-      if (!Array.isArray(categories)) {
+      if (
+        !Array.isArray(categories)
+      ) {
         return '未設定';
       }
 
       return categories
         .map(
           (category) =>
-            CATEGORY_LABELS[category] ||
-            category
+            CATEGORY_LABELS[
+              category
+            ] || category
         )
         .join('、');
     },
@@ -1439,8 +2229,13 @@ async deleteSelectedSchedule() {
      * @returns {string}
      */
     formatJapaneseDate(dateKey) {
-      if (!this.isValidDateKey(dateKey)) {
-        return dateKey || '未設定';
+      if (
+        !this.isValidDateKey(
+          dateKey
+        )
+      ) {
+        return dateKey ||
+          '未設定';
       }
 
       const [
@@ -1489,9 +2284,7 @@ async deleteSelectedSchedule() {
         return value;
       }
 
-      return `${this.formatJapaneseDate(
-        parts[0]
-      )} ${parts[1]}`;
+      return `${this.formatJapaneseDate(parts[0])} ${parts[1]}`;
     },
 
     /**
@@ -1524,14 +2317,44 @@ async deleteSelectedSchedule() {
      * @returns {boolean}
      */
     isValidDateKey(value) {
+      if (
+        typeof value !==
+        'string' ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(
+          value
+        )
+      ) {
+        return false;
+      }
+
+      const [
+        year,
+        month,
+        day,
+      ] = value
+        .split('-')
+        .map(Number);
+
+      const date =
+        new Date(
+          year,
+          month - 1,
+          day
+        );
+
       return (
-        typeof value === 'string' &&
-        /^\d{4}-\d{2}-\d{2}$/.test(value)
+        date.getFullYear() ===
+          year &&
+        date.getMonth() ===
+          month - 1 &&
+        date.getDate() ===
+          day
       );
     },
   };
 
-  window.NinjaUI = UI;
+  window.NinjaUI =
+    UI;
 
   document.addEventListener(
     'DOMContentLoaded',

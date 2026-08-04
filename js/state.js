@@ -6,11 +6,12 @@
  *
  * 予定データの状態管理を担当します。
  *
- * 現在の役割:
+ * 主な役割:
  * - GASから予定一覧を取得
+ * - APIデータをアプリ形式へ変換
+ * - 複数カテゴリーを正規化
  * - localStorageへキャッシュ
  * - GAS取得失敗時はキャッシュを使用
- * - 予定の追加・更新・削除は現段階ではlocalStorage
  */
 
 (function () {
@@ -51,7 +52,8 @@
     /**
      * 状態管理を初期化します。
      *
-     * 最初にキャッシュを表示し、その後GASから最新データを取得します。
+     * 最初にキャッシュを表示し、
+     * その後GASから最新データを取得します。
      *
      * @returns {Promise<Object[]>}
      */
@@ -60,13 +62,16 @@
         return this.ready;
       }
 
-      this.schedules = this.loadCachedSchedules();
+      this.schedules =
+        this.loadCachedSchedules();
+
       this.sortSchedules();
       this.initialized = true;
 
-      this.ready = this.refreshFromApi({
-        silent: true,
-      });
+      this.ready =
+        this.refreshFromApi({
+          silent: true,
+        });
 
       return this.ready;
     },
@@ -84,7 +89,8 @@
 
       if (
         !window.NinjaApi ||
-        typeof window.NinjaApi.getSchedules !== 'function'
+        typeof window.NinjaApi
+          .getSchedules !== 'function'
       ) {
         const error = new Error(
           'API通信機能が読み込まれていません。'
@@ -93,7 +99,9 @@
         this.lastError = error;
 
         if (!options.silent) {
-          this.notifyError(error.message);
+          this.notifyError(
+            error.message
+          );
         }
 
         return this.getSchedules();
@@ -111,31 +119,42 @@
 
       try {
         const apiData =
-          await window.NinjaApi.getSchedules();
+          await window.NinjaApi
+            .getSchedules();
 
         const remoteSchedules =
-          this.extractSchedulesFromApiData(apiData);
+          this.extractSchedulesFromApiData(
+            apiData
+          );
 
         const normalizedSchedules = [];
 
-        remoteSchedules.forEach((record) => {
-          try {
-            const schedule =
-              this.normalizeSchedule(record);
+        remoteSchedules.forEach(
+          (record) => {
+            try {
+              const schedule =
+                this.normalizeSchedule(
+                  record
+                );
 
-            this.validateSchedule(schedule);
+              this.validateSchedule(
+                schedule
+              );
 
-            normalizedSchedules.push(schedule);
-          } catch (error) {
-            console.warn(
-              'APIから取得した不正な予定を除外しました。',
-              {
-                error,
-                record,
-              }
-            );
+              normalizedSchedules.push(
+                schedule
+              );
+            } catch (error) {
+              console.warn(
+                'APIから取得した不正な予定を除外しました。',
+                {
+                  error,
+                  record,
+                }
+              );
+            }
           }
-        });
+        );
 
         this.schedules =
           this.removeDuplicateSchedules(
@@ -236,7 +255,9 @@
      */
     getScheduleById(scheduleId) {
       const normalizedId =
-        this.normalizeText(scheduleId);
+        this.normalizeText(
+          scheduleId
+        );
 
       if (!normalizedId) {
         return null;
@@ -292,10 +313,14 @@
       endDate
     ) {
       const normalizedStart =
-        this.normalizeText(startDate);
+        this.normalizeText(
+          startDate
+        );
 
       const normalizedEnd =
-        this.normalizeText(endDate);
+        this.normalizeText(
+          endDate
+        );
 
       if (
         !this.isValidDate(
@@ -386,10 +411,12 @@
       category
     ) {
       const normalizedCategory =
-        this.normalizeText(category);
+        this.normalizeCategory(
+          category
+        );
 
       if (
-        normalizedCategory ===
+        this.normalizeText(category) ===
         'all'
       ) {
         return this.getSchedules();
@@ -406,6 +433,9 @@
       return this.clone(
         this.schedules.filter(
           (schedule) =>
+            Array.isArray(
+              schedule.categories
+            ) &&
             schedule.categories.includes(
               normalizedCategory
             )
@@ -415,8 +445,6 @@
 
     /**
      * 新規予定を端末内へ保存します。
-     *
-     * GAS保存への切り替えは次のSTEPで行います。
      *
      * @param {Object} scheduleData
      * @returns {Object}
@@ -428,23 +456,32 @@
       const schedule =
         this.normalizeSchedule({
           ...scheduleData,
+
           id:
             this.normalizeText(
               scheduleData?.id
-            ) || this.createId(),
+            ) ||
+            this.createId(),
+
           createdAt:
             this.normalizeText(
               scheduleData?.createdAt
-            ) || now,
-          updatedAt: now,
+            ) ||
+            now,
+
+          updatedAt:
+            now,
         });
 
-      this.validateSchedule(schedule);
+      this.validateSchedule(
+        schedule
+      );
 
       const exists =
         this.schedules.some(
           (item) =>
-            item.id === schedule.id
+            item.id ===
+            schedule.id
         );
 
       if (exists) {
@@ -453,11 +490,16 @@
         );
       }
 
-      this.schedules.push(schedule);
+      this.schedules.push(
+        schedule
+      );
+
       this.sortSchedules();
       this.persistSchedules();
 
-      return this.clone(schedule);
+      return this.clone(
+        schedule
+      );
     },
 
     /**
@@ -472,7 +514,9 @@
       scheduleData
     ) {
       const normalizedId =
-        this.normalizeText(scheduleId);
+        this.normalizeText(
+          scheduleId
+        );
 
       if (!normalizedId) {
         throw new Error(
@@ -500,14 +544,20 @@
         this.normalizeSchedule({
           ...existing,
           ...scheduleData,
-          id: existing.id,
+
+          id:
+            existing.id,
+
           createdAt:
             existing.createdAt,
+
           updatedAt:
             new Date().toISOString(),
         });
 
-      this.validateSchedule(updated);
+      this.validateSchedule(
+        updated
+      );
 
       this.schedules[index] =
         updated;
@@ -515,7 +565,9 @@
       this.sortSchedules();
       this.persistSchedules();
 
-      return this.clone(updated);
+      return this.clone(
+        updated
+      );
     },
 
     /**
@@ -545,6 +597,7 @@
       if (exists) {
         return {
           action: 'updated',
+
           data:
             this.updateSchedule(
               scheduleId,
@@ -555,6 +608,7 @@
 
       return {
         action: 'created',
+
         data:
           this.createSchedule(
             scheduleData
@@ -570,7 +624,9 @@
      */
     deleteSchedule(scheduleId) {
       const normalizedId =
-        this.normalizeText(scheduleId);
+        this.normalizeText(
+          scheduleId
+        );
 
       if (!normalizedId) {
         return false;
@@ -620,7 +676,9 @@
       }
 
       const normalizedDate =
-        this.normalizeText(newDate);
+        this.normalizeText(
+          newDate
+        );
 
       if (
         !this.isValidDate(
@@ -644,12 +702,6 @@
     /**
      * APIレスポンスから予定配列を抽出します。
      *
-     * GAS側のレスポンス形式が次のどれでも対応します。
-     * - data: [...]
-     * - data: {schedules: [...]}
-     * - data: {records: [...]}
-     * - data: {items: [...]}
-     *
      * @param {unknown} apiData
      * @returns {Object[]}
      */
@@ -662,7 +714,8 @@
 
       if (
         !apiData ||
-        typeof apiData !== 'object'
+        typeof apiData !==
+          'object'
       ) {
         return [];
       }
@@ -679,14 +732,12 @@
       const found =
         candidates.find(
           (candidate) =>
-            Array.isArray(candidate)
+            Array.isArray(
+              candidate
+            )
         );
 
-      if (found) {
-        return found;
-      }
-
-      return [];
+      return found || [];
     },
 
     /**
@@ -698,7 +749,8 @@
     normalizeSchedule(record) {
       const source =
         record &&
-        typeof record === 'object'
+        typeof record ===
+          'object'
           ? record
           : {};
 
@@ -709,6 +761,25 @@
           source.isAllDay
         );
 
+      /*
+       * 複数カテゴリーを最優先します。
+       *
+       * 優先順位:
+       * 1. categories
+       * 2. multipleCategories
+       * 3. multiple_categories
+       * 4. targetCategories
+       * 5. category
+       */
+      const categorySource =
+        source.categories ??
+        source.multipleCategories ??
+        source.multiple_categories ??
+        source.targetCategories ??
+        source.target_categories ??
+        source.category ??
+        '';
+
       return {
         id:
           this.normalizeText(
@@ -716,7 +787,8 @@
             source.scheduleId ??
             source.schedule_id ??
             source.ID
-          ) || this.createId(),
+          ) ||
+          this.createId(),
 
         scheduleType:
           this.normalizeScheduleType(
@@ -727,10 +799,7 @@
 
         categories:
           this.normalizeCategories(
-            source.categories ??
-            source.category ??
-            source.targetCategories ??
-            source.target_categories
+            categorySource
           ),
 
         title:
@@ -805,6 +874,7 @@
         description:
           this.normalizeText(
             source.description ??
+            source.content ??
             source.details ??
             source.note
           ),
@@ -860,8 +930,11 @@
       }
 
       if (
+        !Array.isArray(
+          schedule.categories
+        ) ||
         schedule.categories.length ===
-        0
+          0
       ) {
         throw new Error(
           '対象カテゴリーがありません。'
@@ -904,7 +977,8 @@
     removeDuplicateSchedules(
       schedules
     ) {
-      const map = new Map();
+      const map =
+        new Map();
 
       schedules.forEach(
         (schedule) => {
@@ -928,19 +1002,23 @@
         (first, second) => {
           const firstKey = [
             first.date,
+
             first.allDay
               ? '00:00'
               : first.startTime ||
                 '23:59',
+
             first.title,
           ].join('|');
 
           const secondKey = [
             second.date,
+
             second.allDay
               ? '00:00'
               : second.startTime ||
                 '23:59',
+
             second.title,
           ].join('|');
 
@@ -960,9 +1038,10 @@
     loadCachedSchedules() {
       try {
         const stored =
-          window.localStorage.getItem(
-            this.getStorageKey()
-          );
+          window.localStorage
+            .getItem(
+              this.getStorageKey()
+            );
 
         if (!stored) {
           return [];
@@ -977,25 +1056,29 @@
 
         const schedules = [];
 
-        parsed.forEach((record) => {
-          try {
-            const schedule =
-              this.normalizeSchedule(
-                record
+        parsed.forEach(
+          (record) => {
+            try {
+              const schedule =
+                this.normalizeSchedule(
+                  record
+                );
+
+              this.validateSchedule(
+                schedule
               );
 
-            this.validateSchedule(
-              schedule
-            );
-
-            schedules.push(schedule);
-          } catch (error) {
-            console.warn(
-              '不正なキャッシュ予定を除外しました。',
-              error
-            );
+              schedules.push(
+                schedule
+              );
+            } catch (error) {
+              console.warn(
+                '不正なキャッシュ予定を除外しました。',
+                error
+              );
+            }
           }
-        });
+        );
 
         return schedules;
       } catch (error) {
@@ -1066,7 +1149,8 @@
           if (
             window.NinjaCalendar &&
             typeof window.NinjaCalendar
-              .render === 'function'
+              .render ===
+              'function'
           ) {
             window.NinjaCalendar
               .render();
@@ -1118,6 +1202,12 @@
     /**
      * カテゴリーを正規化します。
      *
+     * 対応形式:
+     * - ['boys-u13', 'girls-u14']
+     * - 'boys-u13,girls-u14'
+     * - '男子U13,女子U14'
+     * - JSON文字列
+     *
      * @param {unknown} value
      * @returns {string[]}
      */
@@ -1127,10 +1217,15 @@
       if (Array.isArray(value)) {
         values = value;
       } else if (
-        typeof value === 'string'
+        typeof value ===
+        'string'
       ) {
         const trimmed =
           value.trim();
+
+        if (!trimmed) {
+          return [];
+        }
 
         if (
           trimmed.startsWith('[')
@@ -1146,36 +1241,171 @@
           } catch (error) {
             values =
               trimmed.split(
-                /[,、|]/
+                /[,、\n|]+/
               );
           }
         } else {
           values =
             trimmed.split(
-              /[,、|]/
+              /[,、\n|]+/
             );
         }
+      } else if (
+        value !== null &&
+        value !== undefined
+      ) {
+        values = [
+          value,
+        ];
       }
 
-      const normalized = [
-        ...new Set(
-          values
-            .map((item) =>
-              this.normalizeCategory(
-                item
-              )
-            )
-            .filter((item) =>
-              VALID_CATEGORIES.includes(
-                item
-              )
-            )
-        ),
-      ];
+      const normalized = [];
 
-      return normalized.length > 0
-        ? normalized
-        : ['boys-all'];
+      values.forEach(
+        (item) => {
+          const categories =
+            this.normalizeCategoryValues(
+              item
+            );
+
+          categories.forEach(
+            (category) => {
+              if (
+                VALID_CATEGORIES.includes(
+                  category
+                ) &&
+                !normalized.includes(
+                  category
+                )
+              ) {
+                normalized.push(
+                  category
+                );
+              }
+            }
+          );
+        }
+      );
+
+      return normalized;
+    },
+
+    /**
+     * カテゴリー値1件を内部形式へ変換します。
+     *
+     * 「全体」は男子全体・女子全体として扱います。
+     *
+     * @param {unknown} value
+     * @returns {string[]}
+     */
+    normalizeCategoryValues(value) {
+      const original =
+        this.normalizeText(value);
+
+      if (!original) {
+        return [];
+      }
+
+      const lower =
+        original.toLowerCase();
+
+      const map = {
+        all: [
+          'boys-all',
+          'girls-all',
+        ],
+
+        全体: [
+          'boys-all',
+          'girls-all',
+        ],
+
+        boys: [
+          'boys-all',
+        ],
+
+        girls: [
+          'girls-all',
+        ],
+
+        'boys-all': [
+          'boys-all',
+        ],
+
+        'girls-all': [
+          'girls-all',
+        ],
+
+        'boys-u13': [
+          'boys-u13',
+        ],
+
+        'boys-u14': [
+          'boys-u14',
+        ],
+
+        'boys-u15': [
+          'boys-u15',
+        ],
+
+        'girls-u13': [
+          'girls-u13',
+        ],
+
+        'girls-u14': [
+          'girls-u14',
+        ],
+
+        'girls-u15': [
+          'girls-u15',
+        ],
+
+        男子: [
+          'boys-all',
+        ],
+
+        女子: [
+          'girls-all',
+        ],
+
+        男子全体: [
+          'boys-all',
+        ],
+
+        女子全体: [
+          'girls-all',
+        ],
+
+        男子u13: [
+          'boys-u13',
+        ],
+
+        男子u14: [
+          'boys-u14',
+        ],
+
+        男子u15: [
+          'boys-u15',
+        ],
+
+        女子u13: [
+          'girls-u13',
+        ],
+
+        女子u14: [
+          'girls-u14',
+        ],
+
+        女子u15: [
+          'girls-u15',
+        ],
+      };
+
+      return (
+        map[original] ||
+        map[lower] ||
+        []
+      );
     },
 
     /**
@@ -1185,24 +1415,12 @@
      * @returns {string}
      */
     normalizeCategory(value) {
-      const text =
-        this.normalizeText(value)
-          .toLowerCase();
+      const categories =
+        this.normalizeCategoryValues(
+          value
+        );
 
-      const map = {
-        '男子全体': 'boys-all',
-        '女子全体': 'girls-all',
-        '男子u13': 'boys-u13',
-        '男子u14': 'boys-u14',
-        '男子u15': 'boys-u15',
-        '女子u13': 'girls-u13',
-        '女子u14': 'girls-u14',
-        '女子u15': 'girls-u15',
-      };
-
-      return map[
-        this.normalizeText(value)
-      ] || text;
+      return categories[0] || '';
     },
 
     /**
@@ -1220,14 +1438,22 @@
 
       const map = {
         練習: 'practice',
+        practice: 'practice',
+
         試合: 'game',
+        game: 'game',
+
         遠征: 'trip',
+        trip: 'trip',
+
         off: 'off',
+        OFF: 'off',
         休み: 'off',
       };
 
       const normalized =
         map[original] ||
+        map[lower] ||
         lower;
 
       return VALID_SCHEDULE_TYPES.includes(
@@ -1294,7 +1520,9 @@
         return '';
       }
 
-      return this.formatDate(date);
+      return this.formatDate(
+        date
+      );
     },
 
     /**
@@ -1356,7 +1584,10 @@
         /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/
           .test(text)
       ) {
-        return text.slice(0, 16);
+        return text.slice(
+          0,
+          16
+        );
       }
 
       const date =
@@ -1431,6 +1662,8 @@
      */
     isValidDate(value) {
       if (
+        typeof value !==
+          'string' ||
         !/^\d{4}-\d{2}-\d{2}$/.test(
           value
         )
@@ -1532,7 +1765,8 @@
     },
   };
 
-  window.NinjaState = State;
+  window.NinjaState =
+    State;
 
   document.addEventListener(
     'DOMContentLoaded',

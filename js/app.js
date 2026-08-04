@@ -6,8 +6,13 @@
  *
  * アプリ全体の制御と予定保存処理を管理します。
  *
- * 予定の新規登録・更新はGoogle Apps Script APIへ送信し、
- * 保存後にAPIから予定一覧を再取得します。
+ * 対応機能:
+ * - 予定の新規登録
+ * - 予定の編集
+ * - 複数日一括登録
+ * - GAS保存
+ * - 保存後の予定再取得
+ * - カレンダー再描画
  */
 
 (function () {
@@ -214,31 +219,33 @@
       this.setSubmittingState(true);
 
       try {
+        const formData =
+          validationResult.data;
+
         const scheduleData =
           this.prepareScheduleData(
-            validationResult.data
+            formData
           );
 
         const isUpdate =
           Boolean(scheduleData.id);
 
         if (isUpdate) {
-          await window.NinjaApi
-            .updateSchedule(
-              scheduleData.id,
-              scheduleData
-            );
+          await this.updateSingleSchedule(
+            scheduleData
+          );
+        } else if (
+          formData.dateMode ===
+          'multiple'
+        ) {
+          await this.createMultipleSchedules(
+            scheduleData,
+            formData.multipleDates
+          );
         } else {
-          const createData = {
-            ...scheduleData,
-          };
-
-          delete createData.id;
-
-          await window.NinjaApi
-            .createSchedule(
-              createData
-            );
+          await this.createSingleSchedule(
+            scheduleData
+          );
         }
 
         await window.NinjaState
@@ -247,13 +254,15 @@
           });
 
         this.renderApplication();
+        this.closeScheduleDialogAfterSave();
 
         const successMessage =
           isUpdate
             ? '予定を更新しました。'
-            : '予定を保存しました。';
-
-        this.closeScheduleDialogAfterSave();
+            : formData.dateMode ===
+                'multiple'
+              ? `${formData.multipleDates.length}件の予定を登録しました。`
+              : '予定を保存しました。';
 
         this.showApplicationStatus(
           'success',
@@ -280,6 +289,167 @@
     },
 
     /**
+     * 予定を1件新規登録します。
+     *
+     * @param {Object} scheduleData
+     * @returns {Promise<unknown>}
+     */
+    async createSingleSchedule(
+      scheduleData
+    ) {
+      const createData = {
+        ...scheduleData,
+      };
+
+      delete createData.id;
+      delete createData.dateMode;
+      delete createData.multipleDates;
+
+      return window.NinjaApi
+        .createSchedule(
+          createData
+        );
+    },
+
+    /**
+     * 予定を1件更新します。
+     *
+     * 編集時は複数日更新を行いません。
+     *
+     * @param {Object} scheduleData
+     * @returns {Promise<unknown>}
+     */
+    async updateSingleSchedule(
+      scheduleData
+    ) {
+      const updateData = {
+        ...scheduleData,
+      };
+
+      delete updateData.dateMode;
+      delete updateData.multipleDates;
+
+      return window.NinjaApi
+        .updateSchedule(
+          scheduleData.id,
+          updateData
+        );
+    },
+
+    /**
+     * 複数日へ同じ予定を順番に登録します。
+     *
+     * GASの同時書き込み競合を避けるため、
+     * Promise.allではなく1件ずつ処理します。
+     *
+     * @param {Object} scheduleData
+     * @param {string[]} dates
+     * @returns {Promise<Object[]>}
+     */
+    async createMultipleSchedules(
+      scheduleData,
+      dates
+    ) {
+      const normalizedDates =
+        this.normalizeMultipleDates(
+          dates
+        );
+
+      if (
+        normalizedDates.length === 0
+      ) {
+        throw new Error(
+          '登録する日付がありません。'
+        );
+      }
+
+      const createdSchedules = [];
+
+      for (
+        let index = 0;
+        index < normalizedDates.length;
+        index += 1
+      ) {
+        const date =
+          normalizedDates[index];
+
+        this.updateSubmittingProgress(
+          index + 1,
+          normalizedDates.length
+        );
+
+        const createData = {
+          ...scheduleData,
+          date,
+        };
+
+        delete createData.id;
+        delete createData.dateMode;
+        delete createData.multipleDates;
+
+        try {
+          const result =
+            await window.NinjaApi
+              .createSchedule(
+                createData
+              );
+
+          createdSchedules.push(
+            result
+          );
+        } catch (error) {
+          const completedCount =
+            createdSchedules.length;
+
+          throw new Error(
+            `${date}の予定登録に失敗しました。` +
+            (
+              completedCount > 0
+                ? ` ${completedCount}件は登録済みです。`
+                : ''
+            ) +
+            ` ${this.getErrorMessage(error)}`
+          );
+        }
+      }
+
+      return createdSchedules;
+    },
+
+    /**
+     * 複数日配列を正規化します。
+     *
+     * 不正日付、空欄、重複を除外し、
+     * 日付順に並べます。
+     *
+     * @param {unknown} dates
+     * @returns {string[]}
+     */
+    normalizeMultipleDates(dates) {
+      if (!Array.isArray(dates)) {
+        return [];
+      }
+
+      return [
+        ...new Set(
+          dates
+            .map(
+              (date) =>
+                this.normalizeText(
+                  date
+                )
+            )
+            .filter(
+              (date) =>
+                this.isValidDateKey(
+                  date
+                )
+            )
+        ),
+      ].sort();
+    },
+
+    /**
      * APIへ送信する予定データを整形します。
      *
      * @param {Object} formData
@@ -287,7 +457,9 @@
      */
     prepareScheduleData(formData) {
       const isAllDay =
-        Boolean(formData.allDay);
+        Boolean(
+          formData.allDay
+        );
 
       return {
         id:
@@ -307,10 +479,11 @@
             ? [
                 ...new Set(
                   formData.categories
-                    .map((category) =>
-                      this.normalizeText(
-                        category
-                      )
+                    .map(
+                      (category) =>
+                        this.normalizeText(
+                          category
+                        )
                     )
                     .filter(Boolean)
                 ),
@@ -322,9 +495,20 @@
             formData.title
           ),
 
+        dateMode:
+          formData.dateMode ===
+            'multiple'
+            ? 'multiple'
+            : 'single',
+
         date:
           this.normalizeText(
             formData.date
+          ),
+
+        multipleDates:
+          this.normalizeMultipleDates(
+            formData.multipleDates
           ),
 
         allDay:
@@ -525,7 +709,9 @@
 
       container.innerHTML = '';
 
-      if (schedules.length === 0) {
+      if (
+        schedules.length === 0
+      ) {
         const message =
           document.createElement(
             'p'
@@ -641,11 +827,22 @@
         }
       );
 
-      content.appendChild(title);
-      content.appendChild(meta);
+      content.appendChild(
+        title
+      );
 
-      card.appendChild(mark);
-      card.appendChild(content);
+      content.appendChild(
+        meta
+      );
+
+      card.appendChild(
+        mark
+      );
+
+      card.appendChild(
+        content
+      );
+
       card.appendChild(
         actionButton
       );
@@ -763,6 +960,24 @@
     },
 
     /**
+     * 複数日保存の進捗を保存ボタンへ表示します。
+     *
+     * @param {number} current
+     * @param {number} total
+     */
+    updateSubmittingProgress(
+      current,
+      total
+    ) {
+      if (!this.isSubmitting) {
+        return;
+      }
+
+      this.elements.saveScheduleButton.textContent =
+        `保存中 ${current}/${total}`;
+    },
+
+    /**
      * フォーム内へメッセージを表示します。
      *
      * @param {'success'|'warning'|'error'|'info'} status
@@ -788,9 +1003,13 @@
       }
 
       if (status === 'error') {
-        console.error(message);
+        console.error(
+          message
+        );
       } else {
-        console.log(message);
+        console.log(
+          message
+        );
       }
     },
 
@@ -876,6 +1095,23 @@
     },
 
     /**
+     * エラーから表示用メッセージを取得します。
+     *
+     * @param {unknown} error
+     * @returns {string}
+     */
+    getErrorMessage(error) {
+      if (
+        error instanceof Error &&
+        error.message
+      ) {
+        return error.message;
+      }
+
+      return '通信エラーが発生しました。';
+    },
+
+    /**
      * 文字列を正規化します。
      *
      * @param {unknown} value
@@ -893,6 +1129,48 @@
     },
 
     /**
+     * YYYY-MM-DD形式の日付を確認します。
+     *
+     * @param {string} value
+     * @returns {boolean}
+     */
+    isValidDateKey(value) {
+      if (
+        typeof value !==
+          'string' ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(
+          value
+        )
+      ) {
+        return false;
+      }
+
+      const [
+        year,
+        month,
+        day,
+      ] = value
+        .split('-')
+        .map(Number);
+
+      const date =
+        new Date(
+          year,
+          month - 1,
+          day
+        );
+
+      return (
+        date.getFullYear() ===
+          year &&
+        date.getMonth() ===
+          month - 1 &&
+        date.getDate() ===
+          day
+      );
+    },
+
+    /**
      * DateをYYYY-MM-DDへ変換します。
      *
      * @param {Date} date
@@ -905,18 +1183,25 @@
       const month =
         String(
           date.getMonth() + 1
-        ).padStart(2, '0');
+        ).padStart(
+          2,
+          '0'
+        );
 
       const day =
         String(
           date.getDate()
-        ).padStart(2, '0');
+        ).padStart(
+          2,
+          '0'
+        );
 
       return `${year}-${month}-${day}`;
     },
   };
 
-  window.NinjaApp = App;
+  window.NinjaApp =
+    App;
 
   document.addEventListener(
     'DOMContentLoaded',
