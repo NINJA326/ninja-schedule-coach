@@ -1,0 +1,43 @@
+NINJA AIRS 練習予定表 v4 全置換手順
+
+【GitHubに残すファイル】
+- index.html
+- manifest.json
+- sw.js
+- README.md（任意）
+
+【GitHubから削除してよい旧修正版】
+- index_v3_2_LINE優先修正版.html
+- index_v3_3_LINE判定修正版.html
+- sw_v3_3.js
+
+【GitHub反映】
+1. このフォルダの index.html を、リポジトリ直下の index.html と全置換します。
+2. manifest.json と sw.js も同名ファイルへ全置換します。
+3. 3ファイルをCommitします。
+4. GitHub Pagesの公開URLは https://ninja326.github.io/ninja-schedule/ です。
+
+【Apps Script反映】
+1. Code.gs を全置換します。
+2. appsscript.json を全置換します。
+3. 保存後、「デプロイ」→「デプロイを管理」→編集→新しいバージョン→デプロイします。
+
+【スクリプトプロパティ】
+LINE_LIFF_ID = 2010789200-Iyp3vKNa
+※ https://liff.line.me/ は付けません。
+LINE_LOGIN_CHANNEL_ID = 2010789200
+MASTER_SPREADSHEET_ID = 1GScVV16788TLd0zosjvRCRJ4KgpODyNKw
+SCHEDULE_SPREADSHEET_ID = 1fjebvFkhZiB6xipxtjhHBTE3Is-9L4JMeoR0yxyKlCw
+COACH_PASSWORD = 任意のコーチパスワード
+ATTACHMENT_FOLDER_ID = 現在のフォルダID
+
+【LINE Developers】
+LIFF Endpoint URL = https://ninja326.github.io/ninja-schedule/
+Scope = openid を有効化
+LIFF URL = https://liff.line.me/2010789200-Iyp3vKNa
+
+【確認】
+- 通常Chrome: コーチ専用ログイン画面
+- LINEのLIFF URL: パスワード欄が消え「LINE選手認証を確認しています…」と表示
+- 選手認証成功後: 上部に選手名 / カテゴリー
+- build v4-line-player-priority が表示されること
