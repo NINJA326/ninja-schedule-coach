@@ -68,6 +68,23 @@
     .summary-count{background:#13243b;border-radius:8px;padding:8px 4px;text-align:center;font-size:11px}
     .summary-count strong{display:block;font-size:18px}
     .attendance-row{padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
+    .day-list{display:grid;gap:8px}
+    .day-list-item{
+      width:100%;
+      text-align:left;
+      border:1px solid var(--line);
+      background:#09182a;
+      color:var(--text);
+      border-radius:11px;
+      padding:11px 12px;
+      cursor:pointer;
+    }
+    .day-list-item:active{transform:scale(.995)}
+    .day-list-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .day-list-title{font-size:14px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .day-list-type{font-size:11px;font-weight:800;color:#bfdbfe;white-space:nowrap}
+    .day-list-meta{margin-top:5px;color:var(--muted);font-size:12px;line-height:1.45}
+    .day-list-empty{padding:22px 12px;text-align:center;color:var(--muted)}
     @media(min-width:761px){
       .app{width:min(1180px,100%);margin:auto;padding-left:10px;padding-right:10px}.brand h1{font-size:20px}.brand small{display:block;color:var(--muted)}
       .event .cats{font-size:10px}.event .kind{font-size:11px}.daynum{font-size:12px}.calendar{grid-template-rows:32px repeat(6,minmax(0,1fr))}
@@ -91,7 +108,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.7-remove-sheet-button-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.8-day-list-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -106,6 +123,20 @@
     <div id="status" class="status"></div>
     <div class="calendar-wrap"><section id="calendar" class="calendar" aria-label="月間カレンダー"></section></div>
   </main>
+
+  <div id="dayListModal" class="modal" aria-hidden="true">
+    <section class="dialog">
+      <div class="dialoghead">
+        <h3 id="dayListTitle">この日の予定</h3>
+        <button type="button" id="closeDayListBtn" class="close">×</button>
+      </div>
+      <div id="dayListBody" class="dialogbody"></div>
+      <div class="dialogfoot">
+        <span class="spacer"></span>
+        <button type="button" id="closeDayListFootBtn" class="btn">閉じる</button>
+      </div>
+    </section>
+  </div>
 
   <div id="modal" class="modal" aria-hidden="true">
     <section class="dialog">
@@ -181,7 +212,9 @@ const $=id=>document.getElementById(id);
 const el={
   loginView:$('loginView'),appView:$('appView'),apiUrl:$('apiUrl'),password:$('password'),
   loginBtn:$('loginBtn'),loginStatus:$('loginStatus'),calendar:$('calendar'),monthTitle:$('monthTitle'),
-  status:$('status'),modal:$('modal'),detailView:$('detailView'),form:$('eventForm'),
+  status:$('status'),
+  dayListModal:$('dayListModal'),dayListTitle:$('dayListTitle'),dayListBody:$('dayListBody'),
+  modal:$('modal'),detailView:$('detailView'),form:$('eventForm'),
   detailFoot:$('detailFoot'),editFoot:$('editFoot'),modalStatus:$('modalStatus')
 };
 
@@ -252,6 +285,65 @@ function normalizeCoachEvent(e){
         ? Number(source.deadlineDays)
         : 0
   };
+}
+function formatDisplayDate(dateKey){
+  const [year,month,day]=String(dateKey||'').split('-').map(Number);
+  if(!year||!month||!day)return dateKey||'';
+  const weekday=['日','月','火','水','木','金','土'][new Date(year,month-1,day).getDay()];
+  return `${year}年${month}月${day}日（${weekday}）`;
+}
+function formatEventTimeForList(e){
+  if(e.allDay)return '終日';
+  return [e.startTime,e.endTime].filter(Boolean).join('〜')||'時間未設定';
+}
+function openDayList(dateKey){
+  state.selectedDate=dateKey;
+  renderCalendar();
+
+  const events=state.events
+    .filter(e=>e.date===dateKey)
+    .sort((a,b)=>{
+      if(!!a.allDay!==!!b.allDay)return a.allDay?-1:1;
+      return String(a.startTime||'').localeCompare(String(b.startTime||''));
+    });
+
+  el.dayListTitle.textContent=formatDisplayDate(dateKey)+' の予定';
+
+  if(!events.length){
+    el.dayListBody.innerHTML='<div class="day-list-empty">この日の予定はありません。</div>';
+  }else{
+    el.dayListBody.innerHTML=`
+      <div class="day-list">
+        ${events.map(e=>`
+          <button type="button" class="day-list-item" data-day-event-id="${esc(e.scheduleId)}">
+            <div class="day-list-top">
+              <div class="day-list-title">${esc(e.title||e.type||'予定')}</div>
+              <div class="day-list-type">${esc(e.type||'予定')}</div>
+            </div>
+            <div class="day-list-meta">
+              ${esc(categoriesText(e)||'カテゴリー未設定')}<br>
+              ${esc(formatEventTimeForList(e))}
+              ${e.location?` ／ ${esc(e.location)}`:''}
+            </div>
+          </button>
+        `).join('')}
+      </div>`;
+  }
+
+  el.dayListBody.querySelectorAll('[data-day-event-id]').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      const scheduleId=btn.dataset.dayEventId;
+      closeDayList();
+      await openEvent(scheduleId);
+    });
+  });
+
+  el.dayListModal.classList.add('open');
+  el.dayListModal.setAttribute('aria-hidden','false');
+}
+function closeDayList(){
+  el.dayListModal.classList.remove('open');
+  el.dayListModal.setAttribute('aria-hidden','true');
 }
 function setMode(mode){
   state.mode=mode;
@@ -552,16 +644,24 @@ function renderCalendar(){
       <div class="dayhead"><span class="daynum">${d.getDate()}</span><button class="addmini" data-add="${date}" aria-label="予定追加">＋</button></div>
       ${events.slice(0,2).map(e=>`<button class="event" style="background:${esc(e.color||typeDef(e.type).color)}" data-id="${esc(e.scheduleId)}">
         <span class="cats">${esc(categoriesText(e))}</span><span class="kind">${esc(e.type||'予定')}</span></button>`).join('')}
-      ${events.length>2?`<div class="more">＋${events.length-2}件</div>`:''}
+      ${events.length>2?`<div class="more">全${events.length}件 ＞</div>`:''}
     </div>`;
   }
   el.calendar.innerHTML=html;
   el.calendar.querySelectorAll('.day').forEach(cell=>cell.addEventListener('click',()=>{
-    state.selectedDate=cell.dataset.date;
-    el.calendar.querySelectorAll('.day').forEach(x=>x.classList.toggle('selected',x.dataset.date===state.selectedDate));
+    openDayList(cell.dataset.date);
   }));
-  el.calendar.querySelectorAll('[data-add]').forEach(b=>b.addEventListener('click',ev=>{ev.stopPropagation();state.selectedDate=b.dataset.add;renderCalendar();newEvent(b.dataset.add)}));
-  el.calendar.querySelectorAll('[data-id]').forEach(b=>b.addEventListener('click',async ev=>{ev.stopPropagation();await openEvent(b.dataset.id)}));
+  el.calendar.querySelectorAll('[data-add]').forEach(b=>b.addEventListener('click',ev=>{
+    ev.stopPropagation();
+    state.selectedDate=b.dataset.add;
+    renderCalendar();
+    newEvent(b.dataset.add);
+  }));
+  el.calendar.querySelectorAll('[data-id]').forEach(b=>b.addEventListener('click',ev=>{
+    ev.stopPropagation();
+    const day=state.events.find(e=>e.scheduleId===b.dataset.id)?.date;
+    if(day)openDayList(day);
+  }));
 }
 async function openEvent(scheduleId){
   try{
@@ -826,9 +926,11 @@ async function init(){
   buildSelectors();state.selectedDate=todayKey();el.apiUrl.value=state.apiUrl;
   el.loginBtn.onclick=login;$('newBtn').onclick=()=>newEvent();$('prevBtn').onclick=()=>shiftMonth(-1);$('nextBtn').onclick=()=>shiftMonth(1);$('todayBtn').onclick=()=>loadMonth(monthKey(new Date()));
   $('logoutBtn').onclick=()=>logout(true);
+  $('closeDayListBtn').onclick=closeDayList;$('closeDayListFootBtn').onclick=closeDayList;
   $('closeBtn').onclick=closeModal;$('closeDetailBtn').onclick=closeModal;$('editBtn').onclick=editCurrent;$('copyBtn').onclick=copyCurrent;$('deleteBtn').onclick=deleteCurrent;
   $('cancelEditBtn').onclick=()=>state.currentEvent?renderDetail(state.currentEvent):closeModal();$('saveBtn').onclick=saveEvent;$('allDay').onchange=toggleTimes;
   $('attendanceEnabled').onchange=toggleDeadline;
+  el.dayListModal.addEventListener('click',e=>{if(e.target===el.dayListModal)closeDayList()});
   el.modal.addEventListener('click',e=>{if(e.target===el.modal)closeModal()});
 
   // LINE判定を最優先する。LINE起動時はコーチセッションを復元しない。
