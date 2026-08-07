@@ -91,7 +91,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.3-coach-detail-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.4-edit-category-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="sheetBtn" class="btn ghost">予定表</button>
@@ -284,8 +284,13 @@ function fillForm(e){
   $('deadlineDays').value=Number.isFinite(Number(e?.deadlineDays))?Number(e.deadlineDays):2;
   $('deadlineTime').value=e?.deadlineTime||'21:00';
   toggleDeadline();
-  const cats=new Set(e?.categories||parseCategories(e?.category));
-  document.querySelectorAll('input[name=category]').forEach(x=>x.checked=cats.has(x.value));
+  const cats=new Set(
+    (e?.categories||parseCategories(e?.category))
+      .map(toUiCategory)
+  );
+  document.querySelectorAll('input[name=category]').forEach(
+    x=>x.checked=cats.has(x.value)
+  );
   toggleTimes();
 }
 function renderDetail(e){
@@ -537,6 +542,18 @@ function toApiCategory(category){
     'U13女子':'女子U13',
     'U14女子':'女子U14',
     'U15女子':'女子U15'
+  };
+  return map[category]||category;
+}
+
+function toUiCategory(category){
+  const map={
+    '男子U13':'U13男子',
+    '男子U14':'U14男子',
+    '男子U15':'U15男子',
+    '女子U13':'U13女子',
+    '女子U14':'U14女子',
+    '女子U15':'U15女子'
   };
   return map[category]||category;
 }
