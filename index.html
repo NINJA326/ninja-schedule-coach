@@ -91,10 +91,9 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.6-coach-delete-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.7-remove-sheet-button-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
-          <button id="sheetBtn" class="btn ghost">予定表</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
         </div>
       </div>
@@ -511,7 +510,6 @@ function applyLogin(res){
   sessionStorage.setItem('scheduleToken',state.token);sessionStorage.setItem('scheduleRole',state.role);
   el.loginView.classList.add('hidden');el.appView.classList.remove('hidden');
   $('newBtn').classList.toggle('hidden',state.role!=='coach');
-  $('sheetBtn').classList.toggle('hidden',state.role!=='coach');
   $('roleBadge').textContent=state.role==='player'?(state.player?.playerName||'選手')+' / '+(state.player?.category||''):'コーチ';
 }
 async function login(){
@@ -827,7 +825,7 @@ function logout(callApi=true){
 async function init(){
   buildSelectors();state.selectedDate=todayKey();el.apiUrl.value=state.apiUrl;
   el.loginBtn.onclick=login;$('newBtn').onclick=()=>newEvent();$('prevBtn').onclick=()=>shiftMonth(-1);$('nextBtn').onclick=()=>shiftMonth(1);$('todayBtn').onclick=()=>loadMonth(monthKey(new Date()));
-  $('sheetBtn').onclick=()=>{if(state.sourceUrl)window.open(state.sourceUrl,'_blank')};$('logoutBtn').onclick=()=>logout(true);
+  $('logoutBtn').onclick=()=>logout(true);
   $('closeBtn').onclick=closeModal;$('closeDetailBtn').onclick=closeModal;$('editBtn').onclick=editCurrent;$('copyBtn').onclick=copyCurrent;$('deleteBtn').onclick=deleteCurrent;
   $('cancelEditBtn').onclick=()=>state.currentEvent?renderDetail(state.currentEvent):closeModal();$('saveBtn').onclick=saveEvent;$('allDay').onchange=toggleTimes;
   $('attendanceEnabled').onchange=toggleDeadline;
