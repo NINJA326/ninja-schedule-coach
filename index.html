@@ -91,7 +91,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.2-coach-save-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.3-coach-detail-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="sheetBtn" class="btn ghost">予定表</button>
@@ -509,9 +509,19 @@ function renderCalendar(){
 }
 async function openEvent(scheduleId){
   try{
-    const res=assertOk(await jsonp('event',{token:state.token,scheduleId}));
-    const e=res.event;state.selectedDate=e.date;renderCalendar();renderDetail(e);
-  }catch(err){toast(err.message)}
+    const res=assertOk(await jsonp('coach.app',{
+      op:'get',
+      token:state.token,
+      scheduleId
+    }));
+
+    const e=normalizeCoachEvent(res);
+    state.selectedDate=e.date;
+    renderCalendar();
+    renderDetail(e);
+  }catch(err){
+    toast(err.message);
+  }
 }
 function newEvent(date=todayKey()){
   state.currentEvent=null;$('modalTitle').textContent='予定追加';fillForm({date,type:'練習',categories:[]});showStatus(el.modalStatus,'');setMode('edit');openModal()
