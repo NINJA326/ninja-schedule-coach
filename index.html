@@ -114,7 +114,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.13-instant-save-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.14-stable-prefetch-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -234,6 +234,9 @@ const state={
   monthRequests:new Map(),
   pendingUpserts:new Map(),
   deletedScheduleIds:new Set(),
+  prefetchQueue:[],
+  prefetchBusy:false,
+  prefetchTimer:null,
   swipeStartX:0,
   swipeStartY:0
 };
@@ -724,12 +727,41 @@ async function fetchMonth(month,{silent=false}={}){
     state.monthRequests.delete(month);
   }
 }
-function preloadAround(month){
-  [adjacentMonth(month,-1),adjacentMonth(month,1)].forEach(key=>{
-    if(!state.monthCache.has(key)){
-      fetchMonth(key,{silent:true}).catch(()=>{});
+function schedulePrefetch(month){
+  const candidates=[
+    adjacentMonth(month,1),
+    adjacentMonth(month,-1)
+  ].filter(key=>
+    !state.monthCache.has(key) &&
+    !state.monthRequests.has(key) &&
+    !state.prefetchQueue.includes(key)
+  );
+
+  state.prefetchQueue.push(...candidates);
+
+  if(state.prefetchTimer){
+    clearTimeout(state.prefetchTimer);
+  }
+
+  // 画面操作を優先し、少し落ち着いてから1か月ずつ先読みする。
+  state.prefetchTimer=setTimeout(runPrefetchQueue,1800);
+}
+async function runPrefetchQueue(){
+  if(state.prefetchBusy)return;
+  const month=state.prefetchQueue.shift();
+  if(!month)return;
+
+  state.prefetchBusy=true;
+  try{
+    await fetchMonth(month,{silent:true});
+  }catch(e){
+    // 先読み失敗は画面操作を止めない。
+  }finally{
+    state.prefetchBusy=false;
+    if(state.prefetchQueue.length){
+      state.prefetchTimer=setTimeout(runPrefetchQueue,1200);
     }
-  });
+  }
 }
 async function loadMonth(month,{force=false,silent=false}={}){
   state.month=month;
@@ -740,19 +772,17 @@ async function loadMonth(month,{force=false,silent=false}={}){
     state.events=cached.events;
     renderCalendar();
     if(!silent)showStatus(el.status,`${month.replace('-','.')} を表示しています。`,'ok');
-    preloadAround(month);
 
-    // 表示後に最新状態へ静かに同期する。
-    fetchMonth(month,{silent:true}).catch(e=>{
-      if(/ログイン/.test(e.message))logout(false);
-    });
+    // キャッシュ表示時は現在月を毎回取り直さない。
+    // 前後月だけを操作が落ち着いてから順番に先読みする。
+    schedulePrefetch(month);
     return;
   }
 
   try{
     if(!silent)showStatus(el.status,'予定を読み込んでいます…');
     await fetchMonth(month,{silent});
-    preloadAround(month);
+    schedulePrefetch(month);
   }catch(e){
     if(!silent)showStatus(el.status,e.message,'error');
     if(/ログイン/.test(e.message))logout(false);
