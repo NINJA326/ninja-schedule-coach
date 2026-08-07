@@ -91,7 +91,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4-line-player-priority</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.1-coach-login-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="sheetBtn" class="btn ghost">予定表</button>
@@ -202,7 +202,29 @@ function jsonp(action,params={}){
     document.body.appendChild(script);
   });
 }
-function assertOk(res){if(!res||res.status!=='ok')throw new Error(res&&res.message?res.message:'処理に失敗しました。');return res}
+function assertOk(res){
+  if(!res || typeof res!=='object'){
+    throw new Error('処理に失敗しました。');
+  }
+
+  const success =
+    res.success===true ||
+    res.ok===true ||
+    res.status==='ok';
+
+  if(!success){
+    throw new Error(
+      res.message ||
+      res.error?.message ||
+      res.data?.message ||
+      '処理に失敗しました。'
+    );
+  }
+
+  return Object.prototype.hasOwnProperty.call(res,'data')
+    ? res.data
+    : res;
+}
 function esc(v){return String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]))}
 function showStatus(target,msg,type=''){target.textContent=msg||'';target.className='status'+(type?' '+type:'')}
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
@@ -212,6 +234,26 @@ function todayKey(){return localDateKey(new Date())}
 function typeDef(name){return TYPES.find(x=>x.name===name)||TYPES[0]}
 function categoriesText(e){return (Array.isArray(e.categories)?e.categories:parseCategories(e.category)).join('/')}
 function parseCategories(v){if(Array.isArray(v))return v.filter(Boolean);return String(v||'').split(/[\/,、|]/).map(s=>s.trim()).filter(Boolean)}
+function normalizeCoachEvent(e){
+  const source=e&&typeof e==='object'?e:{};
+  return {
+    ...source,
+    scheduleId:source.scheduleId||source.id||'',
+    type:source.type||source.scheduleType||'練習',
+    categories:Array.isArray(source.categories)
+      ? source.categories
+      : parseCategories(source.multipleCategories||source.category),
+    note:source.note||source.content||'',
+    deadlineAt:[
+      source.deadlineDate||'',
+      source.deadlineTime||''
+    ].filter(Boolean).join(' '),
+    deadlineDays:
+      Number.isFinite(Number(source.deadlineDays))
+        ? Number(source.deadlineDays)
+        : 0
+  };
+}
 function setMode(mode){
   state.mode=mode;
   const detail=mode==='detail';
@@ -418,7 +460,10 @@ async function login(){
   try{
     showStatus(el.loginStatus,'接続中…');
     state.apiUrl=el.apiUrl.value.trim().replace(/\/$/,'');localStorage.setItem('scheduleApiUrl',state.apiUrl);
-    const res=assertOk(await jsonp('login',{password:el.password.value}));
+    const res=assertOk(await jsonp('coach.app',{
+      op:'login',
+      password:el.password.value
+    }));
     applyLogin(res);
     await loadMonth(monthKey(new Date()));
   }catch(e){showStatus(el.loginStatus,e.message,'error')}
@@ -426,8 +471,15 @@ async function login(){
 async function loadMonth(month){
   try{
     state.month=month;showStatus(el.status,'予定を読み込んでいます…');
-    const res=assertOk(await jsonp('events',{token:state.token,month}));
-    state.events=res.events||[];state.sourceUrl=res.sourceUrl||'';
+    const [year,monthNumber]=month.split('-').map(Number);
+    const res=assertOk(await jsonp('coach.app',{
+      op:'month',
+      token:state.token,
+      year,
+      month:monthNumber
+    }));
+    state.events=(res.events||[]).map(normalizeCoachEvent);
+    state.sourceUrl='';
     renderCalendar();showStatus(el.status,`${month.replace('-','.')} を表示しています。`,'ok');
   }catch(e){showStatus(el.status,e.message,'error');if(/ログイン/.test(e.message))logout(false)}
 }
@@ -605,7 +657,23 @@ async function deleteAttachment(id){
   }catch(e){toast(e.message)}
 }
 function shiftMonth(diff){const [y,m]=state.month.split('-').map(Number);loadMonth(monthKey(new Date(y,m-1+diff,1)))}
-function logout(callApi=true){if(callApi&&state.token)jsonp('logout',{token:state.token}).catch(()=>{});state.token='';state.role='';state.player=null;sessionStorage.removeItem('scheduleToken');sessionStorage.removeItem('scheduleRole');el.appView.classList.add('hidden');el.loginView.classList.remove('hidden');showStatus(el.loginStatus,'')}
+function logout(callApi=true){
+  if(callApi&&state.token){
+    if(state.role==='coach'){
+      jsonp('coach.app',{op:'logout',token:state.token}).catch(()=>{});
+    }else{
+      jsonp('logout',{token:state.token}).catch(()=>{});
+    }
+  }
+  state.token='';
+  state.role='';
+  state.player=null;
+  sessionStorage.removeItem('scheduleToken');
+  sessionStorage.removeItem('scheduleRole');
+  el.appView.classList.add('hidden');
+  el.loginView.classList.remove('hidden');
+  showStatus(el.loginStatus,'');
+}
 async function init(){
   buildSelectors();state.selectedDate=todayKey();el.apiUrl.value=state.apiUrl;
   el.loginBtn.onclick=login;$('newBtn').onclick=()=>newEvent();$('prevBtn').onclick=()=>shiftMonth(-1);$('nextBtn').onclick=()=>shiftMonth(1);$('todayBtn').onclick=()=>loadMonth(monthKey(new Date()));
