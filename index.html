@@ -54,11 +54,13 @@
     .dialogbody{flex:1 1 auto;overflow:auto;padding:13px 15px}
     .dialogfoot{flex:0 0 auto;border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:7px;flex-wrap:wrap;background:var(--panel)}
     .dialogfoot .spacer{flex:1}.detail-grid{display:grid;grid-template-columns:110px 1fr;gap:10px 12px;font-size:14px}.detail-grid dt{color:var(--muted);font-weight:800}.detail-grid dd{margin:0;white-space:pre-wrap;word-break:break-word}
-    .category-box{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.category-choice{display:flex;align-items:center;gap:7px;background:#09182a;border:1px solid var(--line);border-radius:9px;padding:9px}
+    .category-box{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+    .category-choice{display:flex;align-items:center;gap:5px;background:#09182a;border:1px solid var(--line);border-radius:7px;padding:5px 7px;font-size:11px;min-height:30px}
+    .category-choice input[type=checkbox]{width:15px;height:15px;margin:0;flex:0 0 auto}
     .type-palette{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.type-choice{border:2px solid transparent;border-radius:9px;min-height:46px;color:#fff;font-size:11px;font-weight:900;padding:5px;cursor:pointer}.type-choice.selected{border-color:#fff;box-shadow:0 0 0 2px #2563eb}
-.color-palette{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
-    .color-choice{height:38px;border-radius:10px;border:2px solid transparent;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
-    .color-choice.selected{border-color:#fff;box-shadow:0 0 0 2px #2563eb}
+.color-palette{display:grid;grid-template-columns:repeat(12,20px);gap:6px;align-items:center}
+    .color-choice{width:20px;height:20px;padding:0;border-radius:6px;border:2px solid transparent;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+    .color-choice.selected{border-color:#fff;box-shadow:0 0 0 1px #2563eb}
     .attachment-list{display:grid;gap:8px;margin-top:8px}.attachment{display:flex;align-items:center;gap:8px;background:#09182a;border:1px solid var(--line);border-radius:9px;padding:8px}
     .attachment-thumb{width:48px;height:48px;border-radius:7px;object-fit:cover;background:#13243b}.attachment-info{min-width:0;flex:1}.attachment-name{font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.attachment-meta{font-size:10px;color:var(--muted)}
     .attachment a{color:#93c5fd;text-decoration:none;font-size:12px;font-weight:800}.upload-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.upload-row input[type=file]{max-width:100%;font-size:12px}
@@ -94,7 +96,7 @@
     @media(min-width:761px){
       .app{width:min(1180px,100%);margin:auto;padding-left:10px;padding-right:10px}.brand h1{font-size:20px}.brand small{display:block;color:var(--muted)}
       .event .cats{font-size:10px}.event .kind{font-size:11px}.daynum{font-size:12px}.calendar{grid-template-rows:32px repeat(6,minmax(0,1fr))}
-      .dialog{border-radius:18px;margin-bottom:3dvh}.modal.open{align-items:center}.category-box{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .dialog{border-radius:18px;margin-bottom:3dvh}.modal.open{align-items:center}.category-box{grid-template-columns:repeat(6,minmax(0,1fr))}
     }
   </style>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -114,7 +116,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.16-save-dedupe-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.17-compact-auto-attendance-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -163,6 +165,7 @@
         <div class="field"><label>詳細</label><textarea id="note" placeholder="集合時間、持ち物、対戦相手、連絡事項など"></textarea></div>
         <div class="attendance-card">
           <label class="category-choice" style="width:max-content"><input id="attendanceEnabled" type="checkbox">出欠回答を必須にする</label>
+          <div id="attendanceAutoNote" class="status"></div>
           <div id="deadlineFields" class="grid2 hidden">
             <div class="field"><label>回答期限（予定日の何日前）</label><input id="deadlineDays" type="number" min="0" max="60" value="2"></div>
             <div class="field"><label>締切時刻</label><input id="deadlineTime" type="time" value="21:00"></div>
@@ -424,7 +427,7 @@ function fillForm(e){
   $('attendanceEnabled').checked=!!e?.attendanceEnabled;
   $('deadlineDays').value=Number.isFinite(Number(e?.deadlineDays))?Number(e.deadlineDays):2;
   $('deadlineTime').value=e?.deadlineTime||'21:00';
-  toggleDeadline();
+  applyAttendanceRule();
   const cats=new Set(
     (e?.categories||parseCategories(e?.category))
       .map(toUiCategory)
@@ -581,6 +584,34 @@ async function loadAttendanceSummary(scheduleId){
   }catch(e){
     showStatus(box,e.message,'error');
   }
+}
+function requiresAutomaticAttendance(type){
+  return ['試合','遠征','イベント'].includes(type);
+}
+function applyAttendanceRule(){
+  const type=$('type').value;
+  const automatic=requiresAutomaticAttendance(type);
+
+  if(automatic){
+    $('attendanceEnabled').checked=true;
+    $('attendanceEnabled').disabled=true;
+    $('deadlineDays').value=14;
+    $('deadlineTime').value='23:59';
+    $('deadlineDays').disabled=true;
+    $('deadlineTime').disabled=true;
+    showStatus(
+      $('attendanceAutoNote'),
+      '試合・遠征・イベントは、予定日の14日前 23:59を回答期限として自動設定します。',
+      'ok'
+    );
+  }else{
+    $('attendanceEnabled').disabled=false;
+    $('deadlineDays').disabled=false;
+    $('deadlineTime').disabled=false;
+    showStatus($('attendanceAutoNote'),'');
+  }
+
+  toggleDeadline();
 }
 function toggleDeadline(){$('deadlineFields').classList.toggle('hidden',!$('attendanceEnabled').checked)}
 
@@ -926,7 +957,8 @@ async function saveEvent(){
 
   const date=$('date').value;
   const scheduleType=$('type').value;
-  const attendanceEnabled=$('attendanceEnabled').checked;
+  const automaticAttendance=requiresAutomaticAttendance(scheduleType);
+  const attendanceEnabled=automaticAttendance||$('attendanceEnabled').checked;
 
   if(!['練習','試合','遠征','OFF'].includes(scheduleType)){
     showStatus(el.modalStatus,'現在保存できる予定種類は「練習・試合・遠征・OFF」です。','error');
@@ -946,10 +978,13 @@ async function saveEvent(){
     allDay:$('allDay').checked,
     attendanceEnabled,
     deadlineDate:attendanceEnabled
-      ? calculateDeadlineDate(date,$('deadlineDays').value)
+      ? calculateDeadlineDate(
+          date,
+          automaticAttendance ? 14 : $('deadlineDays').value
+        )
       : '',
     deadlineTime:attendanceEnabled
-      ? $('deadlineTime').value
+      ? (automaticAttendance ? '23:59' : $('deadlineTime').value)
       : ''
   };
 
@@ -1288,6 +1323,7 @@ async function init(){
   $('cancelEditBtn').onclick=()=>state.currentEvent?renderDetail(state.currentEvent):closeModal();
   $('saveBtn').onclick=saveEvent;
   $('allDay').onchange=toggleTimes;
+  $('type').onchange=applyAttendanceRule;
   $('attendanceEnabled').onchange=toggleDeadline;
 
   el.dayListModal.addEventListener('click',e=>{
