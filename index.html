@@ -114,7 +114,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.15-session-restore-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.16-save-dedupe-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -237,6 +237,7 @@ const state={
   prefetchQueue:[],
   prefetchBusy:false,
   prefetchTimer:null,
+  saveInFlight:false,
   swipeStartX:0,
   swipeStartY:0
 };
@@ -910,6 +911,8 @@ function calculateDeadlineDate(dateKey,daysBefore){
 }
 
 async function saveEvent(){
+  if(state.saveInFlight)return;
+
   const categories=selectedCategories();
   if(!categories.length){
     showStatus(el.modalStatus,'カテゴリーを1つ以上選択してください。','error');
@@ -950,7 +953,10 @@ async function saveEvent(){
       : ''
   };
 
-  const optimisticId=originalScheduleId||('pending-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+  const optimisticId=originalScheduleId||(
+    'pending-'+Date.now()+'-'+Math.random().toString(36).slice(2)
+  );
+
   const optimisticEvent=normalizeCoachEvent({
     ...(originalEvent||{}),
     ...scheduleData,
@@ -964,7 +970,7 @@ async function saveEvent(){
   const newMonth=date.slice(0,7);
   const previousEvents=[...state.events];
 
-  // 保存ボタンを押した瞬間に画面へ反映して閉じる。
+  state.saveInFlight=true;
   state.pendingUpserts.set(optimisticId,optimisticEvent);
 
   if(originalScheduleId){
@@ -972,21 +978,33 @@ async function saveEvent(){
       e.scheduleId===originalScheduleId ? optimisticEvent : e
     );
   }else{
-    state.events=[...state.events,optimisticEvent];
+    state.events=[
+      ...state.events.filter(e=>e.scheduleId!==optimisticId),
+      optimisticEvent
+    ];
   }
 
-  cacheMonth(newMonth,state.events.filter(e=>e.date.slice(0,7)===newMonth));
+  cacheMonth(
+    newMonth,
+    state.events.filter(e=>e.date.slice(0,7)===newMonth)
+  );
+
   if(oldMonth&&oldMonth!==newMonth){
     const oldCached=state.monthCache.get(oldMonth)?.events||[];
-    cacheMonth(oldMonth,oldCached.filter(e=>e.scheduleId!==originalScheduleId));
+    cacheMonth(
+      oldMonth,
+      oldCached.filter(e=>e.scheduleId!==originalScheduleId)
+    );
   }
 
   closeModal();
+
   if(state.month===newMonth){
     renderCalendar();
   }else{
     loadMonth(newMonth);
   }
+
   toast('保存しています…');
 
   try{
@@ -1001,22 +1019,32 @@ async function saveEvent(){
 
     state.pendingUpserts.delete(optimisticId);
 
-    // 新規作成では仮IDを本番IDへ差し替える。更新では最新レスポンスで上書き。
-    state.events=state.events
-      .filter(e=>e.scheduleId!==optimisticId)
-      .map(e=>e.scheduleId===originalScheduleId ? fresh : e);
+    // 先読み通信と保存通信が前後しても、
+    // 仮ID・正式IDの両方を一度消してから正式データを1件だけ入れる。
+    state.events=state.events.filter(e=>
+      e.scheduleId!==optimisticId &&
+      e.scheduleId!==fresh.scheduleId &&
+      (!originalScheduleId || e.scheduleId!==originalScheduleId)
+    );
+    state.events.push(fresh);
 
-    if(!originalScheduleId){
-      state.events.push(fresh);
-    }else if(!state.events.some(e=>e.scheduleId===fresh.scheduleId)){
-      state.events.push(fresh);
+    // 同じ月のキャッシュも同様に重複排除する。
+    const cached=state.monthCache.get(newMonth)?.events||[];
+    const reconciled=cached.filter(e=>
+      e.scheduleId!==optimisticId &&
+      e.scheduleId!==fresh.scheduleId &&
+      (!originalScheduleId || e.scheduleId!==originalScheduleId)
+    );
+    reconciled.push(fresh);
+    cacheMonth(newMonth,reconciled);
+
+    if(state.month===newMonth){
+      state.events=reconciled;
+      renderCalendar();
     }
 
-    cacheMonth(newMonth,state.events.filter(e=>e.date.slice(0,7)===newMonth));
-    renderCalendar();
     toast(originalScheduleId?'予定を更新しました。':'予定を保存しました。');
 
-    // 画面は止めず、裏でサーバー状態と同期。
     fetchMonth(newMonth,{silent:true}).catch(()=>{});
     if(oldMonth&&oldMonth!==newMonth){
       fetchMonth(oldMonth,{silent:true}).catch(()=>{});
@@ -1024,10 +1052,23 @@ async function saveEvent(){
   }catch(e){
     state.pendingUpserts.delete(optimisticId);
     state.events=previousEvents;
-    if(oldMonth)cacheMonth(oldMonth,previousEvents.filter(ev=>ev.date.slice(0,7)===oldMonth));
-    cacheMonth(newMonth,previousEvents.filter(ev=>ev.date.slice(0,7)===newMonth));
+
+    if(oldMonth){
+      cacheMonth(
+        oldMonth,
+        previousEvents.filter(ev=>ev.date.slice(0,7)===oldMonth)
+      );
+    }
+
+    cacheMonth(
+      newMonth,
+      previousEvents.filter(ev=>ev.date.slice(0,7)===newMonth)
+    );
+
     renderCalendar();
     toast('保存できませんでした：'+e.message);
+  }finally{
+    state.saveInFlight=false;
   }
 }
 async function deleteCurrent(){
