@@ -91,7 +91,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.5-attendance-summary-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.6-coach-delete-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="sheetBtn" class="btn ghost">予定表</button>
@@ -677,10 +677,23 @@ async function saveEvent(){
 }
 async function deleteCurrent(){
   if(!state.currentEvent||!confirm('この予定を削除しますか？'))return;
+
+  const scheduleId=state.currentEvent.scheduleId;
+  const month=state.currentEvent.date.slice(0,7);
+
   try{
-    assertOk(await jsonp('delete',{token:state.token,scheduleId:state.currentEvent.scheduleId,sourceRef:state.currentEvent.sourceRef||''}));
-    const month=state.currentEvent.date.slice(0,7);closeModal();toast('削除しました。');await loadMonth(month);
-  }catch(e){toast(e.message)}
+    assertOk(await jsonp('coach.app',{
+      op:'delete',
+      token:state.token,
+      scheduleId
+    }));
+
+    closeModal();
+    await loadMonth(month);
+    toast('削除しました。');
+  }catch(e){
+    toast(e.message);
+  }
 }
 async function uploadAttachment(){
   const input=$('attachmentInput'),file=input.files&&input.files[0],status=$('uploadStatus');
