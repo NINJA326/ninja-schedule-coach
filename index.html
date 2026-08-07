@@ -28,7 +28,10 @@
     .toolbar{flex:0 0 auto;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px;padding:7px 2px 5px}
     .toolbar h2{text-align:center;margin:0;font-size:18px;font-weight:700}.navs{display:flex;gap:4px}
     .status{flex:0 0 auto;min-height:18px;color:var(--muted);font-size:11px;padding:0 4px 4px}.status.error{color:#fecaca}.status.ok{color:#bbf7d0}
-    .calendar-wrap{flex:1 1 auto;min-height:0;overflow:hidden}
+    .calendar-wrap{flex:1 1 auto;min-height:0;overflow:hidden;position:relative}
+    .calendar{will-change:transform,opacity;transition:transform .18s ease,opacity .18s ease}
+    .calendar.slide-left{transform:translateX(-7%);opacity:.72}
+    .calendar.slide-right{transform:translateX(7%);opacity:.72}
     .calendar{height:100%;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:28px repeat(6,minmax(0,1fr));border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
     .dow{display:grid;place-items:center;font-size:11px;font-weight:700;background:#0a1627;border-right:1px solid var(--line)}
     .dow:nth-child(7){border-right:0}.dow.sun{color:#fca5a5}.dow.sat{color:#93c5fd}
@@ -111,7 +114,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.11-schedule-colors-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.12-fast-swipe-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -226,7 +229,11 @@ const state={
   currentEvent:null,
   selectedDate:'',
   selectedColor:'#2563eb',
-  mode:'detail'
+  mode:'detail',
+  monthCache:new Map(),
+  monthRequests:new Map(),
+  swipeStartX:0,
+  swipeStartY:0
 };
 const $=id=>document.getElementById(id);
 const el={
@@ -653,9 +660,20 @@ async function login(){
     await loadMonth(monthKey(new Date()));
   }catch(e){showStatus(el.loginStatus,e.message,'error')}
 }
-async function loadMonth(month){
-  try{
-    state.month=month;showStatus(el.status,'予定を読み込んでいます…');
+function adjacentMonth(month,diff){
+  const [year,monthNumber]=month.split('-').map(Number);
+  return monthKey(new Date(year,monthNumber-1+diff,1));
+}
+function cacheMonth(month,events){
+  state.monthCache.set(month,{
+    events:(events||[]).map(normalizeCoachEvent),
+    savedAt:Date.now()
+  });
+}
+async function fetchMonth(month,{silent=false}={}){
+  if(state.monthRequests.has(month))return state.monthRequests.get(month);
+
+  const request=(async()=>{
     const [year,monthNumber]=month.split('-').map(Number);
     const res=assertOk(await jsonp('coach.app',{
       op:'month',
@@ -663,10 +681,58 @@ async function loadMonth(month){
       year,
       month:monthNumber
     }));
-    state.events=(res.events||[]).map(normalizeCoachEvent);
-    state.sourceUrl='';
-    renderCalendar();showStatus(el.status,`${month.replace('-','.')} を表示しています。`,'ok');
-  }catch(e){showStatus(el.status,e.message,'error');if(/ログイン/.test(e.message))logout(false)}
+    const events=(res.events||[]).map(normalizeCoachEvent);
+    cacheMonth(month,events);
+
+    // 今見ている月だけ最新データで再描画する。
+    if(state.month===month){
+      state.events=events;
+      renderCalendar();
+      if(!silent)showStatus(el.status,`${month.replace('-','.')} を表示しています。`,'ok');
+    }
+    return events;
+  })();
+
+  state.monthRequests.set(month,request);
+  try{
+    return await request;
+  }finally{
+    state.monthRequests.delete(month);
+  }
+}
+function preloadAround(month){
+  [adjacentMonth(month,-1),adjacentMonth(month,1)].forEach(key=>{
+    if(!state.monthCache.has(key)){
+      fetchMonth(key,{silent:true}).catch(()=>{});
+    }
+  });
+}
+async function loadMonth(month,{force=false,silent=false}={}){
+  state.month=month;
+  const cached=state.monthCache.get(month);
+
+  // 取得済みなら通信を待たず、その場で表示する。
+  if(cached&&!force){
+    state.events=cached.events;
+    renderCalendar();
+    if(!silent)showStatus(el.status,`${month.replace('-','.')} を表示しています。`,'ok');
+    preloadAround(month);
+
+    // 表示後に最新状態へ静かに同期する。
+    fetchMonth(month,{silent:true}).catch(e=>{
+      if(/ログイン/.test(e.message))logout(false);
+    });
+    return;
+  }
+
+  try{
+    if(!silent)showStatus(el.status,'予定を読み込んでいます…');
+    await fetchMonth(month,{silent});
+    preloadAround(month);
+  }catch(e){
+    if(!silent)showStatus(el.status,e.message,'error');
+    if(/ログイン/.test(e.message))logout(false);
+  }
 }
 function renderCalendar(){
   const [y,m]=state.month.split('-').map(Number);
@@ -836,7 +902,9 @@ async function saveEvent(){
     }));
 
     closeModal();
-    await loadMonth(date.slice(0,7));
+    const savedMonth=date.slice(0,7);
+    state.monthCache.delete(savedMonth);
+    await loadMonth(savedMonth,{force:true});
     toast(scheduleId?'予定を更新しました。':'予定を保存しました。');
   }catch(e){
     showStatus(el.modalStatus,e.message,'error');
@@ -854,6 +922,7 @@ async function deleteCurrent(){
 
   // 先に画面から消して、操作直後に結果が見えるようにする。
   state.events=state.events.filter(e=>e.scheduleId!==scheduleId);
+  cacheMonth(month,state.events);
   closeModal();
   renderCalendar();
   toast('削除しています…');
@@ -868,10 +937,11 @@ async function deleteCurrent(){
     toast('削除しました。');
 
     // サーバー側の最新状態と静かに同期する。
-    loadMonth(month).catch(()=>{});
+    fetchMonth(month,{silent:true}).catch(()=>{});
   }catch(e){
     // 削除失敗時は表示を元に戻す。
     state.events=previousEvents;
+    cacheMonth(month,previousEvents);
     renderCalendar();
     toast('削除できませんでした：'+e.message);
   }
@@ -987,7 +1057,37 @@ async function deleteAttachment(id){
     renderDetail(fresh.event);toast('添付を削除しました。');
   }catch(e){toast(e.message)}
 }
-function shiftMonth(diff){const [y,m]=state.month.split('-').map(Number);loadMonth(monthKey(new Date(y,m-1+diff,1)))}
+function animateMonth(direction){
+  const cls=direction>0?'slide-left':'slide-right';
+  el.calendar.classList.add(cls);
+  setTimeout(()=>el.calendar.classList.remove(cls),190);
+}
+function shiftMonth(diff){
+  if(!state.month)return;
+  const target=adjacentMonth(state.month,diff);
+  animateMonth(diff);
+  loadMonth(target);
+}
+function bindCalendarSwipe(){
+  const wrap=el.calendar.parentElement;
+  wrap.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1)return;
+    state.swipeStartX=e.touches[0].clientX;
+    state.swipeStartY=e.touches[0].clientY;
+  },{passive:true});
+
+  wrap.addEventListener('touchend',e=>{
+    if(!state.swipeStartX||!e.changedTouches.length)return;
+    const dx=e.changedTouches[0].clientX-state.swipeStartX;
+    const dy=e.changedTouches[0].clientY-state.swipeStartY;
+    state.swipeStartX=0;
+    state.swipeStartY=0;
+
+    // 縦スクロールや軽いタップは月送りにしない。
+    if(Math.abs(dx)<55||Math.abs(dx)<=Math.abs(dy)*1.2)return;
+    shiftMonth(dx<0?1:-1);
+  },{passive:true});
+}
 function logout(callApi=true){
   if(callApi&&state.token){
     if(state.role==='coach'){
@@ -1013,6 +1113,7 @@ async function init(){
   $('closeBtn').onclick=closeModal;$('closeDetailBtn').onclick=closeModal;$('editBtn').onclick=editCurrent;$('copyBtn').onclick=copyCurrent;$('deleteBtn').onclick=deleteCurrent;
   $('cancelEditBtn').onclick=()=>state.currentEvent?renderDetail(state.currentEvent):closeModal();$('saveBtn').onclick=saveEvent;$('allDay').onchange=toggleTimes;
   $('attendanceEnabled').onchange=toggleDeadline;
+  bindCalendarSwipe();
   el.dayListModal.addEventListener('click',e=>{if(e.target===el.dayListModal)closeDayList()});
   el.modal.addEventListener('click',e=>{if(e.target===el.modal)closeModal()});
 
