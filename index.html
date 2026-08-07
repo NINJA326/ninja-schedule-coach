@@ -114,7 +114,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.14-stable-prefetch-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.15-session-restore-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -1226,27 +1226,82 @@ function logout(callApi=true){
   showStatus(el.loginStatus,'');
 }
 async function init(){
-  buildSelectors();state.selectedDate=todayKey();el.apiUrl.value=state.apiUrl;
-  el.loginBtn.onclick=login;$('newBtn').onclick=()=>newEvent();$('prevBtn').onclick=()=>shiftMonth(-1);$('nextBtn').onclick=()=>shiftMonth(1);$('todayBtn').onclick=()=>loadMonth(monthKey(new Date()));
-  $('logoutBtn').onclick=()=>logout(true);
-  $('closeDayListBtn').onclick=closeDayList;$('closeDayListFootBtn').onclick=closeDayList;
-  $('closeBtn').onclick=closeModal;$('closeDetailBtn').onclick=closeModal;$('editBtn').onclick=editCurrent;$('copyBtn').onclick=copyCurrent;$('deleteBtn').onclick=deleteCurrent;
-  $('cancelEditBtn').onclick=()=>state.currentEvent?renderDetail(state.currentEvent):closeModal();$('saveBtn').onclick=saveEvent;$('allDay').onchange=toggleTimes;
-  $('attendanceEnabled').onchange=toggleDeadline;
+  buildSelectors();
   bindCalendarSwipe();
-  el.dayListModal.addEventListener('click',e=>{if(e.target===el.dayListModal)closeDayList()});
-  el.modal.addEventListener('click',e=>{if(e.target===el.modal)closeModal()});
+  state.selectedDate=todayKey();
+  el.apiUrl.value=state.apiUrl;
 
-  // LINE判定を最優先する。LINE起動時はコーチセッションを復元しない。
-  const handledByLine=await initLineLogin();
-  if(!handledByLine&&state.apiUrl&&state.token){
-    applyLogin({token:state.token,role:state.role||'coach',player:null});
-    await loadMonth(monthKey(new Date()));
+  el.loginBtn.onclick=login;
+  $('newBtn').onclick=()=>newEvent();
+  $('prevBtn').onclick=()=>shiftMonth(-1);
+  $('nextBtn').onclick=()=>shiftMonth(1);
+  $('todayBtn').onclick=()=>loadMonth(monthKey(new Date()));
+  $('logoutBtn').onclick=()=>logout(true);
+  $('closeDayListBtn').onclick=closeDayList;
+  $('closeDayListFootBtn').onclick=closeDayList;
+  $('closeBtn').onclick=closeModal;
+  $('closeDetailBtn').onclick=closeModal;
+  $('editBtn').onclick=editCurrent;
+  $('copyBtn').onclick=copyCurrent;
+  $('deleteBtn').onclick=deleteCurrent;
+  $('cancelEditBtn').onclick=()=>state.currentEvent?renderDetail(state.currentEvent):closeModal();
+  $('saveBtn').onclick=saveEvent;
+  $('allDay').onchange=toggleTimes;
+  $('attendanceEnabled').onchange=toggleDeadline;
+
+  el.dayListModal.addEventListener('click',e=>{
+    if(e.target===el.dayListModal)closeDayList();
+  });
+  el.modal.addEventListener('click',e=>{
+    if(e.target===el.modal)closeModal();
+  });
+
+  const lineLaunch=isLineLaunch();
+
+  // 通常ブラウザでコーチのセッションが残っている場合は、
+  // LIFF確認を待たずに即座に予定表へ戻す。
+  if(
+    !lineLaunch &&
+    state.apiUrl &&
+    state.token &&
+    (state.role||'coach')==='coach'
+  ){
+    applyLogin({
+      token:state.token,
+      role:'coach',
+      player:null
+    });
+
+    // 保存済みキャッシュがあれば即表示。
+    const currentMonth=monthKey(new Date());
+    const cached=state.monthCache.get(currentMonth);
+    if(cached){
+      state.month=currentMonth;
+      state.events=cached.events;
+      renderCalendar();
+      showStatus(el.status,`${currentMonth.replace('-','.')} を表示しています。`,'ok');
+    }
+
+    // サーバー確認は裏で行う。無効トークンなら自動でログイン画面へ戻す。
+    loadMonth(currentMonth).catch(()=>{});
+
+  }else{
+    // LINE起動時、またはコーチセッションが無い時だけLIFF判定を行う。
+    const handledByLine=await initLineLogin();
+
+    if(!handledByLine&&state.apiUrl&&state.token){
+      applyLogin({
+        token:state.token,
+        role:state.role||'coach',
+        player:null
+      });
+      await loadMonth(monthKey(new Date()));
+    }
   }
 
   if('serviceWorker' in navigator){
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=4');
+      const reg=await navigator.serviceWorker.register('./sw.js?v=5');
       reg.update().catch(()=>{});
     }catch(e){}
   }
