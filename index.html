@@ -53,6 +53,9 @@
     .dialogfoot .spacer{flex:1}.detail-grid{display:grid;grid-template-columns:110px 1fr;gap:10px 12px;font-size:14px}.detail-grid dt{color:var(--muted);font-weight:800}.detail-grid dd{margin:0;white-space:pre-wrap;word-break:break-word}
     .category-box{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.category-choice{display:flex;align-items:center;gap:7px;background:#09182a;border:1px solid var(--line);border-radius:9px;padding:9px}
     .type-palette{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.type-choice{border:2px solid transparent;border-radius:9px;min-height:46px;color:#fff;font-size:11px;font-weight:900;padding:5px;cursor:pointer}.type-choice.selected{border-color:#fff;box-shadow:0 0 0 2px #2563eb}
+.color-palette{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+    .color-choice{height:38px;border-radius:10px;border:2px solid transparent;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+    .color-choice.selected{border-color:#fff;box-shadow:0 0 0 2px #2563eb}
     .attachment-list{display:grid;gap:8px;margin-top:8px}.attachment{display:flex;align-items:center;gap:8px;background:#09182a;border:1px solid var(--line);border-radius:9px;padding:8px}
     .attachment-thumb{width:48px;height:48px;border-radius:7px;object-fit:cover;background:#13243b}.attachment-info{min-width:0;flex:1}.attachment-name{font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.attachment-meta{font-size:10px;color:var(--muted)}
     .attachment a{color:#93c5fd;text-decoration:none;font-size:12px;font-weight:800}.upload-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.upload-row input[type=file]{max-width:100%;font-size:12px}
@@ -108,7 +111,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.10-instant-delete-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.11-schedule-colors-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -149,6 +152,7 @@
           <div class="field"><label>予定種類 *</label><select id="type"></select></div>
         </div>
         <div class="field"><label>対象カテゴリー *</label><div id="categoryChoices" class="category-box"></div></div>
+        <div class="field"><label>予定カラー</label><div id="colorChoices" class="color-palette"></div></div>
         <div class="field"><label>予定名</label><input id="title" placeholder="例：合同練習"></div>
         <div class="field"><label>会場</label><input id="location" placeholder="例：龍谷大学瀬田キャンパス体育館"></div>
         <label class="category-choice" style="width:max-content"><input id="allDay" type="checkbox">終日</label>
@@ -196,6 +200,21 @@ const TYPES=[
   {name:'その他',color:'#92400e'}
 ];
 
+const SCHEDULE_COLORS=[
+  '#2563eb', // ブルー
+  '#dc2626', // レッド
+  '#16a34a', // グリーン
+  '#eab308', // イエロー
+  '#7c3aed', // パープル
+  '#ea580c', // オレンジ
+  '#0891b2', // シアン
+  '#db2777', // ピンク
+  '#6b7280', // グレー
+  '#92400e', // ブラウン
+  '#0f766e', // ティール
+  '#4338ca'  // インディゴ
+];
+
 const state={
   apiUrl:localStorage.getItem('scheduleApiUrl')||'',
   token:sessionStorage.getItem('scheduleToken')||'',
@@ -206,6 +225,7 @@ const state={
   sourceUrl:'',
   currentEvent:null,
   selectedDate:'',
+  selectedColor:'#2563eb',
   mode:'detail'
 };
 const $=id=>document.getElementById(id);
@@ -358,6 +378,21 @@ function closeModal(){el.modal.classList.remove('open');el.modal.setAttribute('a
 function buildSelectors(){
   $('type').innerHTML=TYPES.map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');
   $('categoryChoices').innerHTML=CATEGORIES.map(c=>`<label class="category-choice"><input type="checkbox" name="category" value="${esc(c)}">${esc(c)}</label>`).join('');
+  $('colorChoices').innerHTML=SCHEDULE_COLORS.map(color=>`
+    <button type="button" class="color-choice" data-color="${color}" style="background:${color}" aria-label="予定カラー ${color}"></button>
+  `).join('');
+  $('colorChoices').querySelectorAll('[data-color]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      state.selectedColor=btn.dataset.color;
+      updateColorSelection();
+    });
+  });
+  updateColorSelection();
+}
+function updateColorSelection(){
+  document.querySelectorAll('[data-color]').forEach(btn=>{
+    btn.classList.toggle('selected',btn.dataset.color===state.selectedColor);
+  });
 }
 function selectedCategories(){return [...document.querySelectorAll('input[name=category]:checked')].map(x=>x.value)}
 function fillForm(e){
@@ -365,6 +400,8 @@ function fillForm(e){
   $('sourceRef').value=e?.sourceRef||'';
   $('date').value=e?.date||todayKey();
   $('type').value=e?.type||'練習';
+  state.selectedColor=e?.color||typeDef(e?.type||'練習').color||SCHEDULE_COLORS[0];
+  updateColorSelection();
   $('title').value=e?.title||'';
   $('location').value=e?.location||'';
   $('allDay').checked=!!e?.allDay;
@@ -709,7 +746,12 @@ async function openEvent(scheduleId){
   }
 }
 function newEvent(date=todayKey()){
-  state.currentEvent=null;$('modalTitle').textContent='予定追加';fillForm({date,type:'練習',categories:[]});showStatus(el.modalStatus,'');setMode('edit');openModal()
+  state.currentEvent=null;
+  $('modalTitle').textContent='予定追加';
+  fillForm({date,type:'練習',categories:[],color:typeDef('練習').color});
+  showStatus(el.modalStatus,'');
+  setMode('edit');
+  openModal();
 }
 function editCurrent(){if(!state.currentEvent)return;$('modalTitle').textContent='予定変更';fillForm(state.currentEvent);showStatus(el.modalStatus,'');setMode('edit')}
 function copyCurrent(){if(!state.currentEvent)return;const copy={...state.currentEvent,scheduleId:'',sourceRef:'',date:state.currentEvent.date};$('modalTitle').textContent='予定複写';fillForm(copy);showStatus(el.modalStatus,'');setMode('edit')}
@@ -772,7 +814,7 @@ async function saveEvent(){
       categories:categories.map(toApiCategory),
       location:$('location').value.trim(),
       scheduleType,
-      color:typeDef(scheduleType).color,
+      color:state.selectedColor||typeDef(scheduleType).color,
       allDay:$('allDay').checked,
       attendanceEnabled,
       deadlineDate:attendanceEnabled
