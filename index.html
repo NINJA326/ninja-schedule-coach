@@ -108,7 +108,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.9-fast-detail-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.10-instant-delete-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -805,8 +805,16 @@ async function saveEvent(){
 async function deleteCurrent(){
   if(!state.currentEvent||!confirm('この予定を削除しますか？'))return;
 
-  const scheduleId=state.currentEvent.scheduleId;
-  const month=state.currentEvent.date.slice(0,7);
+  const deletedEvent={...state.currentEvent};
+  const scheduleId=deletedEvent.scheduleId;
+  const month=deletedEvent.date.slice(0,7);
+  const previousEvents=[...state.events];
+
+  // 先に画面から消して、操作直後に結果が見えるようにする。
+  state.events=state.events.filter(e=>e.scheduleId!==scheduleId);
+  closeModal();
+  renderCalendar();
+  toast('削除しています…');
 
   try{
     assertOk(await jsonp('coach.app',{
@@ -815,11 +823,15 @@ async function deleteCurrent(){
       scheduleId
     }));
 
-    closeModal();
-    await loadMonth(month);
     toast('削除しました。');
+
+    // サーバー側の最新状態と静かに同期する。
+    loadMonth(month).catch(()=>{});
   }catch(e){
-    toast(e.message);
+    // 削除失敗時は表示を元に戻す。
+    state.events=previousEvents;
+    renderCalendar();
+    toast('削除できませんでした：'+e.message);
   }
 }
 async function uploadAttachment(){
