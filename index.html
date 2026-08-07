@@ -99,7 +99,6 @@
       .dialog{border-radius:18px;margin-bottom:3dvh}.modal.open{align-items:center}.category-box{grid-template-columns:repeat(6,minmax(0,1fr))}
     }
   </style>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body>
   <section id="loginView" class="login">
@@ -108,7 +107,6 @@
       <div class="field"><label for="apiUrl">Apps Script WebアプリURL</label><input id="apiUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec"></div>
       <div class="field"><label for="password">パスワード</label><input id="password" type="password" inputmode="numeric" autocomplete="current-password"></div>
       <button id="loginBtn" class="btn primary" style="width:100%">ログイン</button>
-      <div id="lineLoginStatus" class="status">LINE認証を確認しています…</div>
       <div id="loginStatus" class="status"></div>
     </div>
   </section>
@@ -116,7 +114,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.17-compact-auto-attendance-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.18-coach-only-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -224,8 +222,6 @@ const SCHEDULE_COLORS=[
 const state={
   apiUrl:localStorage.getItem('scheduleApiUrl')||'',
   token:sessionStorage.getItem('scheduleToken')||'',
-  role:sessionStorage.getItem('scheduleRole')||'',
-  player:null,liffId:'',
   month:'',
   events:[],
   sourceUrl:'',
@@ -464,14 +460,13 @@ function renderDetail(e){
       <div id="attachmentList" class="attachment-list">${renderAttachments(attachments)}</div>
     </div>`;
   bindAttendancePanel(e);
-  if(state.role==='player') $('uploadRow').classList.add('hidden');
   $('uploadBtn').addEventListener('click',uploadAttachment);
   el.detailView.querySelectorAll('[data-open-attachment]').forEach(btn=>btn.addEventListener('click',()=>openAttachment(btn.dataset.openAttachment)));
   el.detailView.querySelectorAll('[data-delete-attachment]').forEach(btn=>btn.addEventListener('click',()=>deleteAttachment(btn.dataset.deleteAttachment)));
   setMode('detail');
-  el.detailFoot.querySelector('#editBtn').classList.toggle('hidden',state.role!=='coach');
-  el.detailFoot.querySelector('#copyBtn').classList.toggle('hidden',state.role!=='coach');
-  el.detailFoot.querySelector('#deleteBtn').classList.toggle('hidden',state.role!=='coach');
+  el.detailFoot.querySelector('#editBtn').classList.remove('hidden');
+  el.detailFoot.querySelector('#copyBtn').classList.remove('hidden');
+  el.detailFoot.querySelector('#deleteBtn').classList.remove('hidden');
   openModal();
 }
 function renderAttachments(items){
@@ -479,50 +474,20 @@ function renderAttachments(items){
   return items.map(a=>{
     const isImg=String(a.mimeType||'').startsWith('image/');
     const thumb=isImg?`<div class="attachment-thumb" style="display:grid;place-items:center">画像</div>`:`<div class="attachment-thumb" style="display:grid;place-items:center">FILE</div>`;
-    return `<div class="attachment">${thumb}<div class="attachment-info"><div class="attachment-name">${esc(a.fileName)}</div><div class="attachment-meta">${esc(a.mimeType||'')} / ${formatBytes(a.size||0)}</div></div><button class="btn" style="padding:5px 7px;min-height:30px" data-open-attachment="${esc(a.attachmentId)}">見る</button>${state.role==='coach'?`<button class="btn danger" style="padding:5px 7px;min-height:30px" data-delete-attachment="${esc(a.attachmentId)}">削除</button>`:''}</div>`;
+    return `<div class="attachment">${thumb}<div class="attachment-info"><div class="attachment-name">${esc(a.fileName)}</div><div class="attachment-meta">${esc(a.mimeType||'')} / ${formatBytes(a.size||0)}</div></div><button class="btn" style="padding:5px 7px;min-height:30px" data-open-attachment="${esc(a.attachmentId)}">見る</button><button class="btn danger" style="padding:5px 7px;min-height:30px" data-delete-attachment="${esc(a.attachmentId)}">削除</button></div>`;
   }).join('');
 }
 
 function renderAttendancePanel(e){
-  if(!e.attendanceEnabled)return state.role==='coach'?'<div class="attendance-card"><h4>出欠回答</h4><div class="status">この予定では出欠を取りません。</div></div>':'';
-  const deadline=e.deadlineAt||'';
-  if(state.role==='player'){
-    const a=e.myAttendance||{};
-    return `<div class="attendance-card"><h4>出欠回答（必須）</h4><div class="status">回答期限：${esc(deadline||'設定なし')}</div>
-      <div class="attendance-buttons">
-        ${['出席','遅刻','欠席'].map(s=>`<button type="button" class="btn ${a.status===s?'selected':''}" data-att-status="${s}">${s}</button>`).join('')}
-      </div>
-      <div id="attendanceExtra" class="attendance-reason"></div>
-      <div id="attendanceStatus" class="status">${a.status?'現在の回答：'+esc(a.status):'まだ回答していません。'}</div>
-    </div>`;
+  if(!e.attendanceEnabled){
+    return '<div class="attendance-card"><h4>出欠回答</h4><div class="status">この予定では出欠を取りません。</div></div>';
   }
+  const deadline=e.deadlineAt||'';
   return `<div class="attendance-card"><h4>出欠状況</h4><div class="status">回答期限：${esc(deadline||'設定なし')}</div><div id="attendanceSummary" class="status">読み込み中…</div></div>`;
 }
 function bindAttendancePanel(e){
   if(!e.attendanceEnabled)return;
-  if(state.role==='player'){
-    document.querySelectorAll('[data-att-status]').forEach(b=>b.addEventListener('click',()=>showAttendanceForm(b.dataset.attStatus,e.myAttendance||{})));
-  }else loadAttendanceSummary(e.scheduleId);
-}
-function showAttendanceForm(status,current={}){
-  document.querySelectorAll('[data-att-status]').forEach(b=>b.classList.toggle('selected',b.dataset.attStatus===status));
-  const box=$('attendanceExtra');
-  if(status==='出席'){
-    box.innerHTML=`<button type="button" id="saveAttendanceBtn" class="btn primary" style="width:100%">出席で登録</button>`;
-  }else if(status==='遅刻'){
-    box.innerHTML=`<div class="field"><label>到着予定時刻 *</label><input id="arrivalTime" type="time" value="${esc(current.arrivalTime||'')}"></div><div class="field"><label>遅刻理由 *</label><textarea id="attendanceReason"></textarea></div><button type="button" id="saveAttendanceBtn" class="btn primary" style="width:100%">遅刻で登録</button>`;
-  }else{
-    box.innerHTML=`<div class="field"><label>欠席理由 *</label><textarea id="attendanceReason"></textarea></div><button type="button" id="saveAttendanceBtn" class="btn primary" style="width:100%">欠席で登録</button>`;
-  }
-  $('saveAttendanceBtn').onclick=()=>saveAttendance(status);
-}
-async function saveAttendance(status){
-  try{
-    const arrival=$('arrivalTime')?.value||'',reason=$('attendanceReason')?.value.trim()||'';
-    const res=assertOk(await jsonp('saveAttendance',{token:state.token,scheduleId:state.currentEvent.scheduleId,status,arrivalTime:arrival,reason}));
-    state.currentEvent.myAttendance=res.attendance;toast('出欠を登録しました。');
-    renderDetail(state.currentEvent);
-  }catch(e){showStatus($('attendanceStatus'),e.message,'error')}
+  loadAttendanceSummary(e.scheduleId);
 }
 function normalizeAttendanceStatusForCoach(status){
   const value=String(status||'').trim();
@@ -617,85 +582,39 @@ function toggleDeadline(){$('deadlineFields').classList.toggle('hidden',!$('atte
 
 function formatBytes(n){n=Number(n)||0;if(n<1024)return n+'B';if(n<1048576)return (n/1024).toFixed(1)+'KB';return (n/1048576).toFixed(1)+'MB'}
 
-function isLineLaunch(){
-  const ua=navigator.userAgent||'';
-  const params=new URLSearchParams(location.search);
-  return /\bLine\//i.test(ua)||/\bLIFF\b/i.test(ua)||params.has('liff.state')||params.get('mode')==='player'||/^https:\/\/liff\.line\.me\//i.test(document.referrer||'');
-}
-
-async function initLineLogin(){
-  const lineLaunch=isLineLaunch();
-  try{
-    state.apiUrl=el.apiUrl.value.trim().replace(/\/$/,'');
-    if(!state.apiUrl){
-      showStatus($('lineLoginStatus'),'Apps Script URLを設定してください。','error');
-      return lineLaunch;
-    }
-
-    const cfg=assertOk(await jsonp('publicConfig'));
-    state.liffId=String(cfg.liffId||'').trim();
-    if(!state.liffId){
-      showStatus($('lineLoginStatus'),'LINE_LIFF_IDが設定されていません。','error');
-      return lineLaunch;
-    }
-    if(/^https?:\/\//i.test(state.liffId)){
-      throw new Error('LINE_LIFF_IDにはURLではなく「2010789200-Iyp3vKNa」の形式で設定してください。');
-    }
-
-    // LIFFから起動した場合、以前のコーチセッションは絶対に復元しない。
-    if(lineLaunch){
-      sessionStorage.removeItem('scheduleToken');
-      sessionStorage.removeItem('scheduleRole');
-      state.token='';state.role='';state.player=null;
-      el.password.value='';
-      el.loginBtn.classList.add('hidden');
-      el.password.closest('.field').classList.add('hidden');
-      showStatus($('lineLoginStatus'),'LINE選手認証を確認しています…');
-    }
-
-    await liff.init({liffId:state.liffId,withLoginOnExternalBrowser:true});
-
-    // 通常ブラウザはコーチログイン画面として使用する。
-    if(!lineLaunch){
-      showStatus($('lineLoginStatus'),'コーチはパスワードでログインしてください。');
-      return false;
-    }
-
-    if(!liff.isLoggedIn()){
-      liff.login({redirectUri:location.origin+location.pathname+'?mode=player'});
-      return true;
-    }
-
-    const idToken=liff.getIDToken();
-    if(!idToken)throw new Error('LINE認証情報を取得できません。LIFFのScopeでopenidを有効にしてください。');
-    const res=assertOk(await jsonp('lineLogin',{idToken}));
-    applyLogin(res);
-    await loadMonth(monthKey(new Date()));
-    return true;
-  }catch(e){
-    showStatus($('lineLoginStatus'),e.message,'error');
-    // LINEからの起動では、エラー時もコーチログインへ切り替えない。
-    return lineLaunch;
-  }
-}
 function applyLogin(res){
-  state.token=res.token;state.role=res.role||'coach';state.player=res.player||null;
-  sessionStorage.setItem('scheduleToken',state.token);sessionStorage.setItem('scheduleRole',state.role);
-  el.loginView.classList.add('hidden');el.appView.classList.remove('hidden');
-  $('newBtn').classList.toggle('hidden',state.role!=='coach');
-  $('roleBadge').textContent=state.role==='player'?(state.player?.playerName||'選手')+' / '+(state.player?.category||''):'コーチ';
+  state.token=res.token;
+  sessionStorage.setItem('scheduleToken',state.token);
+  el.loginView.classList.add('hidden');
+  el.appView.classList.remove('hidden');
+  $('newBtn').classList.remove('hidden');
+  $('roleBadge').textContent='コーチ';
 }
 async function login(){
   try{
     showStatus(el.loginStatus,'接続中…');
-    state.apiUrl=el.apiUrl.value.trim().replace(/\/$/,'');localStorage.setItem('scheduleApiUrl',state.apiUrl);
+    state.apiUrl=el.apiUrl.value.trim().replace(/\/$/,'');
+    localStorage.setItem('scheduleApiUrl',state.apiUrl);
+
+    if(!state.apiUrl){
+      throw new Error('Apps Script URLを入力してください。');
+    }
+
+    const password=el.password.value;
+    if(!password){
+      throw new Error('パスワードを入力してください。');
+    }
+
     const res=assertOk(await jsonp('coach.app',{
       op:'login',
-      password:el.password.value
+      password
     }));
+
     applyLogin(res);
     await loadMonth(monthKey(new Date()));
-  }catch(e){showStatus(el.loginStatus,e.message,'error')}
+  }catch(e){
+    showStatus(el.loginStatus,e.message,'error');
+  }
 }
 function adjacentMonth(month,diff){
   const [year,monthNumber]=month.split('-').map(Number);
@@ -1286,19 +1205,17 @@ function bindCalendarSwipe(){
 }
 function logout(callApi=true){
   if(callApi&&state.token){
-    if(state.role==='coach'){
-      jsonp('coach.app',{op:'logout',token:state.token}).catch(()=>{});
-    }else{
-      jsonp('logout',{token:state.token}).catch(()=>{});
-    }
+    jsonp('coach.app',{
+      op:'logout',
+      token:state.token
+    }).catch(()=>{});
   }
+
   state.token='';
-  state.role='';
-  state.player=null;
   sessionStorage.removeItem('scheduleToken');
-  sessionStorage.removeItem('scheduleRole');
   el.appView.classList.add('hidden');
   el.loginView.classList.remove('hidden');
+  el.password.value='';
   showStatus(el.loginStatus,'');
 }
 async function init(){
@@ -1333,25 +1250,12 @@ async function init(){
     if(e.target===el.modal)closeModal();
   });
 
-  const lineLaunch=isLineLaunch();
+  if(state.apiUrl&&state.token){
+    applyLogin({token:state.token});
 
-  // 通常ブラウザでコーチのセッションが残っている場合は、
-  // LIFF確認を待たずに即座に予定表へ戻す。
-  if(
-    !lineLaunch &&
-    state.apiUrl &&
-    state.token &&
-    (state.role||'coach')==='coach'
-  ){
-    applyLogin({
-      token:state.token,
-      role:'coach',
-      player:null
-    });
-
-    // 保存済みキャッシュがあれば即表示。
     const currentMonth=monthKey(new Date());
     const cached=state.monthCache.get(currentMonth);
+
     if(cached){
       state.month=currentMonth;
       state.events=cached.events;
@@ -1359,26 +1263,12 @@ async function init(){
       showStatus(el.status,`${currentMonth.replace('-','.')} を表示しています。`,'ok');
     }
 
-    // サーバー確認は裏で行う。無効トークンなら自動でログイン画面へ戻す。
     loadMonth(currentMonth).catch(()=>{});
-
-  }else{
-    // LINE起動時、またはコーチセッションが無い時だけLIFF判定を行う。
-    const handledByLine=await initLineLogin();
-
-    if(!handledByLine&&state.apiUrl&&state.token){
-      applyLogin({
-        token:state.token,
-        role:state.role||'coach',
-        player:null
-      });
-      await loadMonth(monthKey(new Date()));
-    }
   }
 
   if('serviceWorker' in navigator){
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=5');
+      const reg=await navigator.serviceWorker.register('./sw.js?v=6');
       reg.update().catch(()=>{});
     }catch(e){}
   }
