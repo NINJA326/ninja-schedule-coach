@@ -114,7 +114,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.12-fast-swipe-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.13-instant-save-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -232,6 +232,8 @@ const state={
   mode:'detail',
   monthCache:new Map(),
   monthRequests:new Map(),
+  pendingUpserts:new Map(),
+  deletedScheduleIds:new Set(),
   swipeStartX:0,
   swipeStartY:0
 };
@@ -681,10 +683,32 @@ async function fetchMonth(month,{silent=false}={}){
       year,
       month:monthNumber
     }));
-    const events=(res.events||[]).map(normalizeCoachEvent);
+
+    let events=(res.events||[]).map(normalizeCoachEvent);
+
+    // 削除済み予定は、古い先読みレスポンスに含まれていても復活させない。
+    events=events.filter(e=>!state.deletedScheduleIds.has(e.scheduleId));
+
+    // サーバーから削除後の状態が確認できたIDは監視対象から外す。
+    [...state.deletedScheduleIds].forEach(id=>{
+      if(!events.some(e=>e.scheduleId===id)){
+        state.deletedScheduleIds.delete(id);
+      }
+    });
+
+    // 保存処理中の予定は、サーバーの古いレスポンスより画面側の最新値を優先する。
+    state.pendingUpserts.forEach((optimistic,id)=>{
+      if(optimistic.date.slice(0,7)!==month)return;
+      const index=events.findIndex(e=>e.scheduleId===id);
+      if(index>=0){
+        events[index]={...events[index],...optimistic};
+      }else{
+        events.push(optimistic);
+      }
+    });
+
     cacheMonth(month,events);
 
-    // 今見ている月だけ最新データで再描画する。
     if(state.month===month){
       state.events=events;
       renderCalendar();
@@ -856,60 +880,124 @@ function calculateDeadlineDate(dateKey,daysBefore){
 }
 
 async function saveEvent(){
+  const categories=selectedCategories();
+  if(!categories.length){
+    showStatus(el.modalStatus,'カテゴリーを1つ以上選択してください。','error');
+    return;
+  }
+
+  const originalScheduleId=$('scheduleId').value.trim();
+  const originalEvent=originalScheduleId
+    ? state.events.find(e=>e.scheduleId===originalScheduleId)
+    : null;
+
+  const date=$('date').value;
+  const scheduleType=$('type').value;
+  const attendanceEnabled=$('attendanceEnabled').checked;
+
+  if(!['練習','試合','遠征','OFF'].includes(scheduleType)){
+    showStatus(el.modalStatus,'現在保存できる予定種類は「練習・試合・遠征・OFF」です。','error');
+    return;
+  }
+
+  const scheduleData={
+    date,
+    startTime:$('allDay').checked?'':$('startTime').value,
+    endTime:$('allDay').checked?'':$('endTime').value,
+    title:$('title').value.trim(),
+    content:$('note').value.trim(),
+    categories:categories.map(toApiCategory),
+    location:$('location').value.trim(),
+    scheduleType,
+    color:state.selectedColor||typeDef(scheduleType).color,
+    allDay:$('allDay').checked,
+    attendanceEnabled,
+    deadlineDate:attendanceEnabled
+      ? calculateDeadlineDate(date,$('deadlineDays').value)
+      : '',
+    deadlineTime:attendanceEnabled
+      ? $('deadlineTime').value
+      : ''
+  };
+
+  const optimisticId=originalScheduleId||('pending-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+  const optimisticEvent=normalizeCoachEvent({
+    ...(originalEvent||{}),
+    ...scheduleData,
+    scheduleId:optimisticId,
+    id:optimisticId,
+    type:scheduleType,
+    note:scheduleData.content
+  });
+
+  const oldMonth=originalEvent?.date?.slice(0,7)||'';
+  const newMonth=date.slice(0,7);
+  const previousEvents=[...state.events];
+
+  // 保存ボタンを押した瞬間に画面へ反映して閉じる。
+  state.pendingUpserts.set(optimisticId,optimisticEvent);
+
+  if(originalScheduleId){
+    state.events=state.events.map(e=>
+      e.scheduleId===originalScheduleId ? optimisticEvent : e
+    );
+  }else{
+    state.events=[...state.events,optimisticEvent];
+  }
+
+  cacheMonth(newMonth,state.events.filter(e=>e.date.slice(0,7)===newMonth));
+  if(oldMonth&&oldMonth!==newMonth){
+    const oldCached=state.monthCache.get(oldMonth)?.events||[];
+    cacheMonth(oldMonth,oldCached.filter(e=>e.scheduleId!==originalScheduleId));
+  }
+
+  closeModal();
+  if(state.month===newMonth){
+    renderCalendar();
+  }else{
+    loadMonth(newMonth);
+  }
+  toast('保存しています…');
+
   try{
-    const categories=selectedCategories();
-    if(!categories.length){
-      throw new Error('カテゴリーを1つ以上選択してください。');
-    }
-
-    const scheduleId=$('scheduleId').value.trim();
-    const date=$('date').value;
-    const scheduleType=$('type').value;
-    const attendanceEnabled=$('attendanceEnabled').checked;
-
-    if(!['練習','試合','遠征','OFF'].includes(scheduleType)){
-      throw new Error('現在保存できる予定種類は「練習・試合・遠征・OFF」です。');
-    }
-
-    const scheduleData={
-      date,
-      startTime:$('allDay').checked?'':$('startTime').value,
-      endTime:$('allDay').checked?'':$('endTime').value,
-      title:$('title').value.trim(),
-      content:$('note').value.trim(),
-      categories:categories.map(toApiCategory),
-      location:$('location').value.trim(),
-      scheduleType,
-      color:state.selectedColor||typeDef(scheduleType).color,
-      allDay:$('allDay').checked,
-      attendanceEnabled,
-      deadlineDate:attendanceEnabled
-        ? calculateDeadlineDate(date,$('deadlineDays').value)
-        : '',
-      deadlineTime:attendanceEnabled
-        ? $('deadlineTime').value
-        : ''
-    };
-
-    $('saveBtn').disabled=true;
-    showStatus(el.modalStatus,'保存中…');
-
-    assertOk(await jsonp('coach.app',{
+    const saved=assertOk(await jsonp('coach.app',{
       op:'save',
       token:state.token,
-      scheduleId,
+      scheduleId:originalScheduleId,
       data:JSON.stringify(scheduleData)
     }));
 
-    closeModal();
-    const savedMonth=date.slice(0,7);
-    state.monthCache.delete(savedMonth);
-    await loadMonth(savedMonth,{force:true});
-    toast(scheduleId?'予定を更新しました。':'予定を保存しました。');
+    const fresh=normalizeCoachEvent(saved);
+
+    state.pendingUpserts.delete(optimisticId);
+
+    // 新規作成では仮IDを本番IDへ差し替える。更新では最新レスポンスで上書き。
+    state.events=state.events
+      .filter(e=>e.scheduleId!==optimisticId)
+      .map(e=>e.scheduleId===originalScheduleId ? fresh : e);
+
+    if(!originalScheduleId){
+      state.events.push(fresh);
+    }else if(!state.events.some(e=>e.scheduleId===fresh.scheduleId)){
+      state.events.push(fresh);
+    }
+
+    cacheMonth(newMonth,state.events.filter(e=>e.date.slice(0,7)===newMonth));
+    renderCalendar();
+    toast(originalScheduleId?'予定を更新しました。':'予定を保存しました。');
+
+    // 画面は止めず、裏でサーバー状態と同期。
+    fetchMonth(newMonth,{silent:true}).catch(()=>{});
+    if(oldMonth&&oldMonth!==newMonth){
+      fetchMonth(oldMonth,{silent:true}).catch(()=>{});
+    }
   }catch(e){
-    showStatus(el.modalStatus,e.message,'error');
-  }finally{
-    $('saveBtn').disabled=false;
+    state.pendingUpserts.delete(optimisticId);
+    state.events=previousEvents;
+    if(oldMonth)cacheMonth(oldMonth,previousEvents.filter(ev=>ev.date.slice(0,7)===oldMonth));
+    cacheMonth(newMonth,previousEvents.filter(ev=>ev.date.slice(0,7)===newMonth));
+    renderCalendar();
+    toast('保存できませんでした：'+e.message);
   }
 }
 async function deleteCurrent(){
@@ -920,7 +1008,8 @@ async function deleteCurrent(){
   const month=deletedEvent.date.slice(0,7);
   const previousEvents=[...state.events];
 
-  // 先に画面から消して、操作直後に結果が見えるようにする。
+  // 先に画面から消し、古い先読みレスポンスからも復活させない。
+  state.deletedScheduleIds.add(scheduleId);
   state.events=state.events.filter(e=>e.scheduleId!==scheduleId);
   cacheMonth(month,state.events);
   closeModal();
@@ -939,7 +1028,8 @@ async function deleteCurrent(){
     // サーバー側の最新状態と静かに同期する。
     fetchMonth(month,{silent:true}).catch(()=>{});
   }catch(e){
-    // 削除失敗時は表示を元に戻す。
+    // 削除失敗時だけ削除済みマークを解除して表示を元に戻す。
+    state.deletedScheduleIds.delete(scheduleId);
     state.events=previousEvents;
     cacheMonth(month,previousEvents);
     renderCalendar();
