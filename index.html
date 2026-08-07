@@ -91,7 +91,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.1-coach-login-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge"></div><div class="build-badge">build v4.2-coach-save-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="sheetBtn" class="btn ghost">予定表</button>
@@ -519,24 +519,81 @@ function newEvent(date=todayKey()){
 function editCurrent(){if(!state.currentEvent)return;$('modalTitle').textContent='予定変更';fillForm(state.currentEvent);showStatus(el.modalStatus,'');setMode('edit')}
 function copyCurrent(){if(!state.currentEvent)return;const copy={...state.currentEvent,scheduleId:'',sourceRef:'',date:state.currentEvent.date};$('modalTitle').textContent='予定複写';fillForm(copy);showStatus(el.modalStatus,'');setMode('edit')}
 function toggleTimes(){$('timeFields').classList.toggle('hidden',$('allDay').checked)}
+function toApiCategory(category){
+  const map={
+    'U13男子':'男子U13',
+    'U14男子':'男子U14',
+    'U15男子':'男子U15',
+    'U13女子':'女子U13',
+    'U14女子':'女子U14',
+    'U15女子':'女子U15'
+  };
+  return map[category]||category;
+}
+
+function calculateDeadlineDate(dateKey,daysBefore){
+  if(!dateKey)return '';
+  const days=Math.max(0,Number(daysBefore)||0);
+  const [year,month,day]=dateKey.split('-').map(Number);
+  const date=new Date(year,month-1,day);
+  date.setDate(date.getDate()-days);
+  return localDateKey(date);
+}
+
 async function saveEvent(){
   try{
     const categories=selectedCategories();
-    if(!categories.length)throw new Error('カテゴリーを1つ以上選択してください。');
-    const data={
-      token:state.token,scheduleId:$('scheduleId').value,sourceRef:$('sourceRef').value,
-      date:$('date').value,type:$('type').value,categories:JSON.stringify(categories),
-      title:$('title').value.trim(),location:$('location').value.trim(),
-      allDay:$('allDay').checked,startTime:$('startTime').value,endTime:$('endTime').value,
-      note:$('note').value.trim(),
-      attendanceEnabled:$('attendanceEnabled').checked,
-      deadlineDays:$('deadlineDays').value,
-      deadlineTime:$('deadlineTime').value
+    if(!categories.length){
+      throw new Error('カテゴリーを1つ以上選択してください。');
+    }
+
+    const scheduleId=$('scheduleId').value.trim();
+    const date=$('date').value;
+    const scheduleType=$('type').value;
+    const attendanceEnabled=$('attendanceEnabled').checked;
+
+    if(!['練習','試合','遠征','OFF'].includes(scheduleType)){
+      throw new Error('現在保存できる予定種類は「練習・試合・遠征・OFF」です。');
+    }
+
+    const scheduleData={
+      date,
+      startTime:$('allDay').checked?'':$('startTime').value,
+      endTime:$('allDay').checked?'':$('endTime').value,
+      title:$('title').value.trim(),
+      content:$('note').value.trim(),
+      categories:categories.map(toApiCategory),
+      location:$('location').value.trim(),
+      scheduleType,
+      color:typeDef(scheduleType).color,
+      allDay:$('allDay').checked,
+      attendanceEnabled,
+      deadlineDate:attendanceEnabled
+        ? calculateDeadlineDate(date,$('deadlineDays').value)
+        : '',
+      deadlineTime:attendanceEnabled
+        ? $('deadlineTime').value
+        : ''
     };
-    $('saveBtn').disabled=true;showStatus(el.modalStatus,'保存中…');
-    assertOk(await jsonp('save',data));
-    closeModal();toast('保存しました。');await loadMonth(data.date.slice(0,7));
-  }catch(e){showStatus(el.modalStatus,e.message,'error')}finally{$('saveBtn').disabled=false}
+
+    $('saveBtn').disabled=true;
+    showStatus(el.modalStatus,'保存中…');
+
+    assertOk(await jsonp('coach.app',{
+      op:'save',
+      token:state.token,
+      scheduleId,
+      data:JSON.stringify(scheduleData)
+    }));
+
+    closeModal();
+    await loadMonth(date.slice(0,7));
+    toast(scheduleId?'予定を更新しました。':'予定を保存しました。');
+  }catch(e){
+    showStatus(el.modalStatus,e.message,'error');
+  }finally{
+    $('saveBtn').disabled=false;
+  }
 }
 async function deleteCurrent(){
   if(!state.currentEvent||!confirm('この予定を削除しますか？'))return;
