@@ -114,7 +114,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.18-coach-only-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.19-event-attendance-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -879,8 +879,8 @@ async function saveEvent(){
   const automaticAttendance=requiresAutomaticAttendance(scheduleType);
   const attendanceEnabled=automaticAttendance||$('attendanceEnabled').checked;
 
-  if(!['練習','試合','遠征','OFF'].includes(scheduleType)){
-    showStatus(el.modalStatus,'現在保存できる予定種類は「練習・試合・遠征・OFF」です。','error');
+  if(!['練習','試合','遠征','イベント','OFF'].includes(scheduleType)){
+    showStatus(el.modalStatus,'現在保存できる予定種類は「練習・試合・遠征・イベント・OFF」です。','error');
     return;
   }
 
