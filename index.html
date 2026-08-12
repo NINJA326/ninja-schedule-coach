@@ -114,7 +114,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.19-event-attendance-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.21-smart-attendance-deadline-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -566,7 +566,7 @@ function applyAttendanceRule(){
     $('deadlineTime').disabled=true;
     showStatus(
       $('attendanceAutoNote'),
-      '試合・遠征・イベントは、予定日の14日前 23:59を回答期限として自動設定します。',
+      '試合・遠征・イベントは、登録時期に応じて回答期限を自動設定します。',
       'ok'
     );
   }else{
@@ -860,6 +860,36 @@ function calculateDeadlineDate(dateKey,daysBefore){
   return localDateKey(date);
 }
 
+function calculateAutomaticAttendanceDeadline(dateKey){
+  if(!dateKey)return '';
+
+  const [year,month,day]=dateKey.split('-').map(Number);
+  const eventDate=new Date(year,month-1,day);
+  eventDate.setHours(0,0,0,0);
+
+  const today=new Date();
+  today.setHours(0,0,0,0);
+
+  const fourteenDaysBefore=new Date(eventDate);
+  fourteenDaysBefore.setDate(fourteenDaysBefore.getDate()-14);
+
+  const threeDaysBefore=new Date(eventDate);
+  threeDaysBefore.setDate(threeDaysBefore.getDate()-3);
+
+  // 14日以上前に登録 → 予定日の14日前
+  if(today.getTime()<=fourteenDaysBefore.getTime()){
+    return localDateKey(fourteenDaysBefore);
+  }
+
+  // 14日前を切っているが3日前以前 → 予定日の3日前
+  if(today.getTime()<=threeDaysBefore.getTime()){
+    return localDateKey(threeDaysBefore);
+  }
+
+  // 予定日の3日前を切って登録 → 登録当日
+  return localDateKey(today);
+}
+
 async function saveEvent(){
   if(state.saveInFlight)return;
 
@@ -897,9 +927,10 @@ async function saveEvent(){
     allDay:$('allDay').checked,
     attendanceEnabled,
     deadlineDate:attendanceEnabled
-      ? calculateDeadlineDate(
-          date,
-          automaticAttendance ? 14 : $('deadlineDays').value
+      ? (
+          automaticAttendance
+            ? calculateAutomaticAttendanceDeadline(date)
+            : calculateDeadlineDate(date,$('deadlineDays').value)
         )
       : '',
     deadlineTime:attendanceEnabled
