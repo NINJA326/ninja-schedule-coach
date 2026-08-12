@@ -76,6 +76,19 @@
     .summary-count{background:#13243b;border-radius:8px;padding:8px 4px;text-align:center;font-size:11px}
     .summary-count strong{display:block;font-size:18px}
     .attendance-row{padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
+    .attendance-groups{display:grid;gap:10px;margin-top:12px}
+    .attendance-group{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0b1930}
+    .attendance-group-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;font-size:12px;font-weight:900}
+    .attendance-group-head strong{font-size:15px}
+    .attendance-group-body{padding:0 10px}
+    .attendance-empty{padding:10px 0;color:var(--muted);font-size:12px}
+    .status-badge{display:inline-flex;align-items:center;justify-content:center;min-width:52px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:900}
+    .status-present{background:#14532d;color:#dcfce7}
+    .status-late{background:#92400e;color:#fef3c7}
+    .status-absent{background:#7f1d1d;color:#fee2e2}
+    .status-unanswered{background:#334155;color:#e2e8f0}
+    .attendance-row-line{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .attendance-row-meta{margin-top:3px;color:var(--muted);font-size:11px;line-height:1.45}
     .day-list{display:grid;gap:8px}
     .day-list-item{
       width:100%;
@@ -114,7 +127,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.21-smart-attendance-deadline-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.22-attendance-visual-v12.1</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -525,27 +538,67 @@ async function loadAttendanceSummary(scheduleId){
       }
     });
 
+    const grouped={
+      '出席':[],
+      '遅刻':[],
+      '欠席':[],
+      '未回答':[]
+    };
+
+    list.forEach(row=>{
+      const normalized=normalizeAttendanceStatusForCoach(row.status);
+      const status=normalized==='未定'?'未回答':normalized;
+      if(!grouped[status])grouped[status]=[];
+      grouped[status].push(row);
+    });
+
+    const statusClass={
+      '出席':'status-present',
+      '遅刻':'status-late',
+      '欠席':'status-absent',
+      '未回答':'status-unanswered'
+    };
+
     box.innerHTML=`
       <div class="summary-counts">
         ${['出席','遅刻','欠席','未回答'].map(s=>
           `<div class="summary-count"><strong>${counts[s]||0}</strong>${s}</div>`
         ).join('')}
       </div>
-      <div style="margin-top:10px">
-        ${
-          list.map(row=>{
-            const status=normalizeAttendanceStatusForCoach(row.status);
-            const displayStatus=status==='未定'?'未回答':status;
-            return `<div class="attendance-row">
-              <strong>${esc(row.playerName||'名前未登録')}</strong>　
-              ${esc(displayStatus)}
-              ${row.arrivalTime?'（'+esc(row.arrivalTime)+'）':''}
-              ${row.reason?'<br>'+esc(row.reason):''}
-            </div>`;
-          }).join('') ||
-          '<div class="status">対象選手がいません。</div>'
-        }
-      </div>`;
+
+      <div class="attendance-groups">
+        ${['出席','遅刻','欠席','未回答'].map(status=>{
+          const rows=grouped[status]||[];
+
+          return `<section class="attendance-group">
+            <div class="attendance-group-head">
+              <span class="status-badge ${statusClass[status]}">${status}</span>
+              <strong>${rows.length}名</strong>
+            </div>
+            <div class="attendance-group-body">
+              ${
+                rows.length
+                  ? rows.map(row=>`
+                    <div class="attendance-row">
+                      <div class="attendance-row-line">
+                        <strong>${esc(row.playerName||'名前未登録')}</strong>
+                        ${row.arrivalTime?`<span>${esc(row.arrivalTime)}</span>`:''}
+                      </div>
+                      ${row.reason?`<div class="attendance-row-meta">${esc(row.reason)}</div>`:''}
+                    </div>
+                  `).join('')
+                  : '<div class="attendance-empty">該当選手はいません。</div>'
+              }
+            </div>
+          </section>`;
+        }).join('')}
+      </div>
+
+      ${
+        list.length
+          ? ''
+          : '<div class="status">対象選手がいません。</div>'
+      }`;
   }catch(e){
     showStatus(box,e.message,'error');
   }
