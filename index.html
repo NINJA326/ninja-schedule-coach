@@ -127,7 +127,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.26-persistent-month-cache-v12.3</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.27-local-first-crud-v12.3</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -1305,8 +1305,6 @@ async function saveEvent(){
     loadMonth(newMonth);
   }
 
-  toast('保存しています…');
-
   try{
     const saved=assertOk(await jsonp('coach.app',{
       op:'save',
@@ -1343,12 +1341,13 @@ async function saveEvent(){
       renderCalendar();
     }
 
+    /*
+     * 画面・端末キャッシュはすでに即時更新済み。
+     * 保存APIの戻り値を正式データとして確定するため、
+     * ここでは月データの再取得を行わない。
+     * 不要な通信・再描画・体感ラグを防ぐ。
+     */
     toast(originalScheduleId?'予定を更新しました。':'予定を保存しました。');
-
-    fetchMonth(newMonth,{silent:true}).catch(()=>{});
-    if(oldMonth&&oldMonth!==newMonth){
-      fetchMonth(oldMonth,{silent:true}).catch(()=>{});
-    }
   }catch(e){
     state.pendingUpserts.delete(optimisticId);
     state.events=previousEvents;
@@ -1385,8 +1384,6 @@ async function deleteCurrent(){
   cacheMonth(month,state.events);
   closeModal();
   renderCalendar();
-  toast('削除しています…');
-
   try{
     assertOk(await jsonp('coach.app',{
       op:'delete',
@@ -1394,10 +1391,11 @@ async function deleteCurrent(){
       scheduleId
     }));
 
+    /*
+     * API成功時点で削除確定。
+     * 端末キャッシュ・画面は先に削除済みなので再取得しない。
+     */
     toast('削除しました。');
-
-    // サーバー側の最新状態と静かに同期する。
-    fetchMonth(month,{silent:true}).catch(()=>{});
   }catch(e){
     // 削除失敗時だけ削除済みマークを解除して表示を元に戻す。
     state.deletedScheduleIds.delete(scheduleId);
