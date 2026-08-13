@@ -127,7 +127,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.23-line-notification-toggle-v12.2</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.24-attendance-prefetch-v12.3</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -255,6 +255,8 @@ const state={
   mode:'detail',
   monthCache:new Map(),
   monthRequests:new Map(),
+  attendanceMonthCache:new Map(),
+  attendanceMonthRequests:new Map(),
   pendingUpserts:new Map(),
   deletedScheduleIds:new Set(),
   prefetchQueue:[],
@@ -512,8 +514,29 @@ function renderAttendancePanel(e){
 }
 function bindAttendancePanel(e){
   if(!e.attendanceEnabled)return;
-  loadAttendanceSummary(e.scheduleId);
+
+  const scheduleId=e.scheduleId;
+  const month=String(e.date||'').slice(0,7);
+  const cachedMonth=state.attendanceMonthCache.get(month);
+  const cachedEntry=cachedMonth?.bySchedule?.[scheduleId];
+
+  if(cachedEntry){
+    renderAttendanceSummaryResult(
+      scheduleId,
+      cachedEntry.rows,
+      cachedEntry.counts
+    );
+  }
+
+  loadAttendanceSummary(
+    scheduleId,
+    {
+      month,
+      silent:!!cachedEntry
+    }
+  );
 }
+
 function normalizeAttendanceStatusForCoach(status){
   const value=String(status||'').trim();
   if(value==='参加'||value==='出席')return '出席';
@@ -523,7 +546,131 @@ function normalizeAttendanceStatusForCoach(status){
   return '未回答';
 }
 
-async function loadAttendanceSummary(scheduleId){
+function buildAttendanceCounts(rows){
+  const list=Array.isArray(rows)?rows:[];
+  const counts={
+    '出席':0,
+    '遅刻':0,
+    '欠席':0,
+    '未回答':0
+  };
+
+  list.forEach(row=>{
+    const status=normalizeAttendanceStatusForCoach(row.status);
+    if(status==='未定'){
+      counts['未回答']+=1;
+    }else{
+      counts[status]=(counts[status]||0)+1;
+    }
+  });
+
+  return counts;
+}
+
+function renderAttendanceSummaryResult(scheduleId,rows,providedCounts){
+  const box=$('attendanceSummary');
+  if(!box)return;
+
+  if(
+    state.currentEvent &&
+    state.currentEvent.scheduleId &&
+    state.currentEvent.scheduleId!==scheduleId
+  ){
+    return;
+  }
+
+  const list=Array.isArray(rows)?rows:[];
+  const counts=providedCounts&&typeof providedCounts==='object'
+    ? {
+        '出席':Number(providedCounts['出席'])||0,
+        '遅刻':Number(providedCounts['遅刻'])||0,
+        '欠席':Number(providedCounts['欠席'])||0,
+        '未回答':Number(providedCounts['未回答'])||0
+      }
+    : buildAttendanceCounts(list);
+
+  const grouped={
+    '出席':[],
+    '遅刻':[],
+    '欠席':[],
+    '未回答':[]
+  };
+
+  list.forEach(row=>{
+    const normalized=normalizeAttendanceStatusForCoach(row.status);
+    const status=normalized==='未定'?'未回答':normalized;
+    if(!grouped[status])grouped[status]=[];
+    grouped[status].push(row);
+  });
+
+  const statusClass={
+    '出席':'status-present',
+    '遅刻':'status-late',
+    '欠席':'status-absent',
+    '未回答':'status-unanswered'
+  };
+
+  box.innerHTML=`
+    <div class="summary-counts">
+      ${['出席','遅刻','欠席','未回答'].map(s=>
+        `<div class="summary-count"><strong>${counts[s]||0}</strong>${s}</div>`
+      ).join('')}
+    </div>
+
+    <div class="attendance-groups">
+      ${['出席','遅刻','欠席','未回答'].map(status=>{
+        const groupRows=grouped[status]||[];
+
+        return `<section class="attendance-group">
+          <div class="attendance-group-head">
+            <span class="status-badge ${statusClass[status]}">${status}</span>
+            <strong>${groupRows.length}名</strong>
+          </div>
+          <div class="attendance-group-body">
+            ${
+              groupRows.length
+                ? groupRows.map(row=>`
+                  <div class="attendance-row">
+                    <div class="attendance-row-line">
+                      <strong>${esc(row.playerName||'名前未登録')}</strong>
+                      ${row.arrivalTime?`<span>${esc(row.arrivalTime)}</span>`:''}
+                    </div>
+                    ${row.reason?`<div class="attendance-row-meta">${esc(row.reason)}</div>`:''}
+                  </div>
+                `).join('')
+                : '<div class="attendance-empty">該当選手はいません。</div>'
+            }
+          </div>
+        </section>`;
+      }).join('')}
+    </div>
+
+    ${
+      list.length
+        ? ''
+        : '<div class="status">対象選手がいません。</div>'
+    }`;
+}
+
+function updateAttendanceMonthCacheEntry(month,scheduleId,rows,counts){
+  if(!month||!scheduleId)return;
+
+  const current=state.attendanceMonthCache.get(month)||{
+    bySchedule:{},
+    loadedAt:0
+  };
+
+  current.bySchedule=current.bySchedule||{};
+  current.bySchedule[scheduleId]={
+    rows:Array.isArray(rows)?rows:[],
+    counts:counts||buildAttendanceCounts(rows)
+  };
+  current.loadedAt=Date.now();
+
+  state.attendanceMonthCache.set(month,current);
+}
+
+async function loadAttendanceSummary(scheduleId,{month='',silent=false}={}){
   const box=$('attendanceSummary');
   if(!box)return;
 
@@ -534,87 +681,80 @@ async function loadAttendanceSummary(scheduleId){
     }));
 
     const list=Array.isArray(rows)?rows:[];
-    const counts={
-      '出席':0,
-      '遅刻':0,
-      '欠席':0,
-      '未回答':0
-    };
+    const counts=buildAttendanceCounts(list);
 
-    list.forEach(row=>{
-      const status=normalizeAttendanceStatusForCoach(row.status);
-      if(status==='未定'){
-        counts['未回答']+=1;
-      }else{
-        counts[status]=(counts[status]||0)+1;
-      }
-    });
+    updateAttendanceMonthCacheEntry(
+      month||String(state.currentEvent?.date||'').slice(0,7),
+      scheduleId,
+      list,
+      counts
+    );
 
-    const grouped={
-      '出席':[],
-      '遅刻':[],
-      '欠席':[],
-      '未回答':[]
-    };
-
-    list.forEach(row=>{
-      const normalized=normalizeAttendanceStatusForCoach(row.status);
-      const status=normalized==='未定'?'未回答':normalized;
-      if(!grouped[status])grouped[status]=[];
-      grouped[status].push(row);
-    });
-
-    const statusClass={
-      '出席':'status-present',
-      '遅刻':'status-late',
-      '欠席':'status-absent',
-      '未回答':'status-unanswered'
-    };
-
-    box.innerHTML=`
-      <div class="summary-counts">
-        ${['出席','遅刻','欠席','未回答'].map(s=>
-          `<div class="summary-count"><strong>${counts[s]||0}</strong>${s}</div>`
-        ).join('')}
-      </div>
-
-      <div class="attendance-groups">
-        ${['出席','遅刻','欠席','未回答'].map(status=>{
-          const rows=grouped[status]||[];
-
-          return `<section class="attendance-group">
-            <div class="attendance-group-head">
-              <span class="status-badge ${statusClass[status]}">${status}</span>
-              <strong>${rows.length}名</strong>
-            </div>
-            <div class="attendance-group-body">
-              ${
-                rows.length
-                  ? rows.map(row=>`
-                    <div class="attendance-row">
-                      <div class="attendance-row-line">
-                        <strong>${esc(row.playerName||'名前未登録')}</strong>
-                        ${row.arrivalTime?`<span>${esc(row.arrivalTime)}</span>`:''}
-                      </div>
-                      ${row.reason?`<div class="attendance-row-meta">${esc(row.reason)}</div>`:''}
-                    </div>
-                  `).join('')
-                  : '<div class="attendance-empty">該当選手はいません。</div>'
-              }
-            </div>
-          </section>`;
-        }).join('')}
-      </div>
-
-      ${
-        list.length
-          ? ''
-          : '<div class="status">対象選手がいません。</div>'
-      }`;
+    renderAttendanceSummaryResult(
+      scheduleId,
+      list,
+      counts
+    );
   }catch(e){
-    showStatus(box,e.message,'error');
+    if(!silent){
+      showStatus(box,e.message,'error');
+    }
   }
 }
+
+async function prefetchAttendanceMonth(month,{force=false}={}){
+  if(!month||!state.token||!state.apiUrl)return null;
+
+  const cached=state.attendanceMonthCache.get(month);
+  const isFresh=
+    cached &&
+    !force &&
+    Date.now()-(Number(cached.loadedAt)||0)<45000;
+
+  if(isFresh){
+    return cached;
+  }
+
+  if(state.attendanceMonthRequests.has(month)){
+    return state.attendanceMonthRequests.get(month);
+  }
+
+  const [year,monthNumber]=month.split('-').map(Number);
+
+  const request=(async()=>{
+    const data=assertOk(await jsonp('attendance.getByMonth',{
+      token:state.token,
+      year,
+      month:monthNumber
+    }));
+
+    const normalized={
+      bySchedule:
+        data&&typeof data.bySchedule==='object'
+          ? data.bySchedule
+          : {},
+      loadedAt:Date.now()
+    };
+
+    state.attendanceMonthCache.set(
+      month,
+      normalized
+    );
+
+    return normalized;
+  })();
+
+  state.attendanceMonthRequests.set(month,request);
+
+  try{
+    return await request;
+  }catch(e){
+    return null;
+  }finally{
+    state.attendanceMonthRequests.delete(month);
+  }
+}
+
 function requiresAutomaticAttendance(type){
   return ['試合','遠征','イベント'].includes(type);
 }
@@ -790,6 +930,8 @@ async function loadMonth(month,{force=false,silent=false}={}){
     if(!silent)showStatus(el.status,`${month.replace('-','.')} を表示しています。`,'ok');
 
     // キャッシュ表示時は現在月を毎回取り直さない。
+    prefetchAttendanceMonth(month).catch(()=>{});
+
     // 前後月だけを操作が落ち着いてから順番に先読みする。
     schedulePrefetch(month);
     return;
@@ -798,6 +940,7 @@ async function loadMonth(month,{force=false,silent=false}={}){
   try{
     if(!silent)showStatus(el.status,'予定を読み込んでいます…');
     await fetchMonth(month,{silent});
+    prefetchAttendanceMonth(month).catch(()=>{});
     schedulePrefetch(month);
   }catch(e){
     if(!silent)showStatus(el.status,e.message,'error');
