@@ -127,7 +127,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.24-attendance-prefetch-v12.3</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.25-fast-startup-v12.3</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -242,6 +242,69 @@ const SCHEDULE_COLORS=[
   '#0f766e', // ティール
   '#4338ca'  // インディゴ
 ];
+
+
+const STARTUP_CACHE_CONFIG=Object.freeze({
+  PREFIX:'ninja_coach_month_cache_',
+  MAX_AGE_MS:5*60*1000,
+  BACKGROUND_REFRESH_AFTER_MS:5000
+});
+
+function startupCacheKey(month){
+  return STARTUP_CACHE_CONFIG.PREFIX+month;
+}
+
+function saveStartupMonthCache(month,events){
+  try{
+    sessionStorage.setItem(
+      startupCacheKey(month),
+      JSON.stringify({
+        month,
+        events:(events||[]).map(normalizeCoachEvent),
+        savedAt:Date.now()
+      })
+    );
+  }catch(e){}
+}
+
+function loadStartupMonthCache(month){
+  try{
+    const raw=sessionStorage.getItem(startupCacheKey(month));
+    if(!raw)return null;
+
+    const parsed=JSON.parse(raw);
+    const savedAt=Number(parsed?.savedAt)||0;
+    const events=Array.isArray(parsed?.events)
+      ? parsed.events.map(normalizeCoachEvent)
+      : null;
+
+    if(!events || !savedAt){
+      sessionStorage.removeItem(startupCacheKey(month));
+      return null;
+    }
+
+    if(Date.now()-savedAt>STARTUP_CACHE_CONFIG.MAX_AGE_MS){
+      sessionStorage.removeItem(startupCacheKey(month));
+      return null;
+    }
+
+    return {
+      events,
+      savedAt
+    };
+  }catch(e){
+    sessionStorage.removeItem(startupCacheKey(month));
+    return null;
+  }
+}
+
+function clearStartupMonthCaches(){
+  try{
+    Object.keys(sessionStorage)
+      .filter(key=>key.startsWith(STARTUP_CACHE_CONFIG.PREFIX))
+      .forEach(key=>sessionStorage.removeItem(key));
+  }catch(e){}
+}
 
 const state={
   apiUrl:localStorage.getItem('scheduleApiUrl')||'',
@@ -826,10 +889,18 @@ function adjacentMonth(month,diff){
   return monthKey(new Date(year,monthNumber-1+diff,1));
 }
 function cacheMonth(month,events){
+  const normalized=(events||[]).map(normalizeCoachEvent);
+  const savedAt=Date.now();
+
   state.monthCache.set(month,{
-    events:(events||[]).map(normalizeCoachEvent),
-    savedAt:Date.now()
+    events:normalized,
+    savedAt
   });
+
+  saveStartupMonthCache(
+    month,
+    normalized
+  );
 }
 async function fetchMonth(month,{silent=false}={}){
   if(state.monthRequests.has(month))return state.monthRequests.get(month);
@@ -929,10 +1000,16 @@ async function loadMonth(month,{force=false,silent=false}={}){
     renderCalendar();
     if(!silent)showStatus(el.status,`${month.replace('-','.')} を表示しています。`,'ok');
 
-    // キャッシュ表示時は現在月を毎回取り直さない。
     prefetchAttendanceMonth(month).catch(()=>{});
 
-    // 前後月だけを操作が落ち着いてから順番に先読みする。
+    // 古すぎないキャッシュは即表示し、必要な場合だけ裏で最新版へ更新する。
+    const cacheAge=Date.now()-(Number(cached.savedAt)||0);
+    if(cacheAge>=STARTUP_CACHE_CONFIG.BACKGROUND_REFRESH_AFTER_MS){
+      setTimeout(()=>{
+        fetchMonth(month,{silent:true}).catch(()=>{});
+      },0);
+    }
+
     schedulePrefetch(month);
     return;
   }
@@ -1453,6 +1530,9 @@ function logout(callApi=true){
 
   state.token='';
   sessionStorage.removeItem('scheduleToken');
+  clearStartupMonthCaches();
+  state.monthCache.clear();
+  state.attendanceMonthCache.clear();
   el.appView.classList.add('hidden');
   el.loginView.classList.remove('hidden');
   el.password.value='';
@@ -1494,6 +1574,13 @@ async function init(){
     applyLogin({token:state.token});
 
     const currentMonth=monthKey(new Date());
+
+    // ページ再読み込み時は、前回の同一セッション内キャッシュを最優先で復元する。
+    const persisted=loadStartupMonthCache(currentMonth);
+    if(persisted){
+      state.monthCache.set(currentMonth,persisted);
+    }
+
     const cached=state.monthCache.get(currentMonth);
 
     if(cached){
