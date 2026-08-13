@@ -127,7 +127,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.25-fast-startup-v12.3</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.26-persistent-month-cache-v12.3</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -245,8 +245,8 @@ const SCHEDULE_COLORS=[
 
 
 const STARTUP_CACHE_CONFIG=Object.freeze({
-  PREFIX:'ninja_coach_month_cache_',
-  MAX_AGE_MS:5*60*1000,
+  PREFIX:'ninja_coach_month_cache_v2_',
+  MAX_AGE_MS:7*24*60*60*1000,
   BACKGROUND_REFRESH_AFTER_MS:5000
 });
 
@@ -256,7 +256,7 @@ function startupCacheKey(month){
 
 function saveStartupMonthCache(month,events){
   try{
-    sessionStorage.setItem(
+    localStorage.setItem(
       startupCacheKey(month),
       JSON.stringify({
         month,
@@ -269,7 +269,7 @@ function saveStartupMonthCache(month,events){
 
 function loadStartupMonthCache(month){
   try{
-    const raw=sessionStorage.getItem(startupCacheKey(month));
+    const raw=localStorage.getItem(startupCacheKey(month));
     if(!raw)return null;
 
     const parsed=JSON.parse(raw);
@@ -279,12 +279,12 @@ function loadStartupMonthCache(month){
       : null;
 
     if(!events || !savedAt){
-      sessionStorage.removeItem(startupCacheKey(month));
+      localStorage.removeItem(startupCacheKey(month));
       return null;
     }
 
     if(Date.now()-savedAt>STARTUP_CACHE_CONFIG.MAX_AGE_MS){
-      sessionStorage.removeItem(startupCacheKey(month));
+      localStorage.removeItem(startupCacheKey(month));
       return null;
     }
 
@@ -293,16 +293,31 @@ function loadStartupMonthCache(month){
       savedAt
     };
   }catch(e){
-    sessionStorage.removeItem(startupCacheKey(month));
+    localStorage.removeItem(startupCacheKey(month));
     return null;
   }
 }
 
+function hydrateMonthCache(month){
+  if(state.monthCache.has(month)){
+    return state.monthCache.get(month);
+  }
+
+  const persisted=loadStartupMonthCache(month);
+
+  if(persisted){
+    state.monthCache.set(month,persisted);
+    return persisted;
+  }
+
+  return null;
+}
+
 function clearStartupMonthCaches(){
   try{
-    Object.keys(sessionStorage)
+    Object.keys(localStorage)
       .filter(key=>key.startsWith(STARTUP_CACHE_CONFIG.PREFIX))
-      .forEach(key=>sessionStorage.removeItem(key));
+      .forEach(key=>localStorage.removeItem(key));
   }catch(e){}
 }
 
@@ -955,10 +970,19 @@ async function fetchMonth(month,{silent=false}={}){
   }
 }
 function schedulePrefetch(month){
-  const candidates=[
+  const neighborMonths=[
     adjacentMonth(month,1),
     adjacentMonth(month,-1)
-  ].filter(key=>
+  ];
+
+  // 前月・翌月も端末保存済みなら通信せずメモリへ復元する。
+  neighborMonths.forEach(key=>{
+    if(!state.monthCache.has(key)){
+      hydrateMonthCache(key);
+    }
+  });
+
+  const candidates=neighborMonths.filter(key=>
     !state.monthCache.has(key) &&
     !state.monthRequests.has(key) &&
     !state.prefetchQueue.includes(key)
@@ -992,7 +1016,12 @@ async function runPrefetchQueue(){
 }
 async function loadMonth(month,{force=false,silent=false}={}){
   state.month=month;
-  const cached=state.monthCache.get(month);
+
+  // ページを閉じた後でも、端末保存済みの月を最優先で即表示する。
+  const cached=
+    force
+      ? state.monthCache.get(month)
+      : hydrateMonthCache(month);
 
   // 取得済みなら通信を待たず、その場で表示する。
   if(cached&&!force){
@@ -1575,13 +1604,8 @@ async function init(){
 
     const currentMonth=monthKey(new Date());
 
-    // ページ再読み込み時は、前回の同一セッション内キャッシュを最優先で復元する。
-    const persisted=loadStartupMonthCache(currentMonth);
-    if(persisted){
-      state.monthCache.set(currentMonth,persisted);
-    }
-
-    const cached=state.monthCache.get(currentMonth);
+    // ページを閉じた後でも、端末保存済みの今月予定を最優先で復元する。
+    const cached=hydrateMonthCache(currentMonth);
 
     if(cached){
       state.month=currentMonth;
