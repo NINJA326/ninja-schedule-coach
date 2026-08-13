@@ -127,7 +127,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.22-attendance-visual-v12.1</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.23-line-notification-toggle-v12.2</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -182,6 +182,17 @@
             <div class="field"><label>締切時刻</label><input id="deadlineTime" type="time" value="21:00"></div>
           </div>
         </div>
+
+        <div class="attendance-card">
+          <label class="category-choice" style="width:max-content">
+            <input id="notify" type="checkbox">
+            LINEで選手へ通知する
+          </label>
+          <div class="status">
+            保存時に、選択したカテゴリーのLINE連携済み選手へ通知します。
+          </div>
+        </div>
+
         <div id="modalStatus" class="status"></div>
       </form>
       <div id="detailFoot" class="dialogfoot">
@@ -434,6 +445,7 @@ function fillForm(e){
   $('endTime').value=e?.endTime||'';
   $('note').value=e?.note||'';
   $('attendanceEnabled').checked=!!e?.attendanceEnabled;
+  $('notify').checked=false;
   $('deadlineDays').value=Number.isFinite(Number(e?.deadlineDays))?Number(e.deadlineDays):2;
   $('deadlineTime').value=e?.deadlineTime||'21:00';
   applyAttendanceRule();
@@ -988,7 +1000,8 @@ async function saveEvent(){
       : '',
     deadlineTime:attendanceEnabled
       ? (automaticAttendance ? '23:59' : $('deadlineTime').value)
-      : ''
+      : '',
+    notify:$('notify').checked
   };
 
   const optimisticId=originalScheduleId||(
