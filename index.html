@@ -69,6 +69,21 @@
     .role-badge{font-size:11px;color:#bfdbfe;white-space:nowrap}.build-badge{font-size:10px;color:#94a3b8;margin-top:2px}
     .attendance-card{margin-top:14px;border:1px solid var(--line);background:#09182a;border-radius:12px;padding:12px}
     .attendance-card h4{margin:0 0 8px;font-size:15px}
+    .coach-attendance-card{margin-top:14px;border:1px solid var(--line);background:#09182a;border-radius:12px;padding:12px}
+    .coach-attendance-card h4{margin:0 0 4px;font-size:15px}
+    .coach-attendance-note{margin:0 0 10px;color:var(--muted);font-size:11px}
+    .coach-attendance-list{display:grid;gap:9px}
+    .coach-attendance-row{border:1px solid var(--line);background:#0b1930;border-radius:10px;padding:9px}
+    .coach-attendance-top{display:grid;grid-template-columns:minmax(70px,1fr) auto;gap:8px;align-items:center}
+    .coach-attendance-name{font-size:14px;font-weight:900}
+    .coach-attendance-actions{display:flex;gap:6px}
+    .coach-attendance-status{min-width:42px;min-height:36px;padding:6px 10px}
+    .coach-attendance-status.selected{outline:2px solid #fff}
+    .coach-attendance-status.ok.selected{background:var(--ok);border-color:var(--ok)}
+    .coach-attendance-status.ng.selected{background:var(--danger);border-color:var(--danger)}
+    .coach-attendance-comment{width:100%;margin-top:8px;border:1px solid var(--line);background:#071425;color:var(--text);border-radius:8px;padding:9px 10px;min-height:40px}
+    .coach-attendance-save{margin-top:7px;display:flex;align-items:center;justify-content:flex-end;gap:8px}
+    .coach-attendance-save .status{flex:1;padding:0;min-height:0}
     .attendance-buttons{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
     .attendance-buttons button.selected{outline:2px solid #fff}
     .attendance-reason{margin-top:10px}
@@ -127,7 +142,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.27-local-first-crud-v12.3</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.28-coach-attendance-v12.3</div></div>
         <div class="actions">
           <button id="newBtn" class="btn primary">＋追加</button>
           <button id="logoutBtn" class="btn ghost">退出</button>
@@ -242,6 +257,13 @@ const SCHEDULE_COLORS=[
   '#0f766e', // ティール
   '#4338ca'  // インディゴ
 ];
+
+const COACH_ATTENDANCE_ROSTER=Object.freeze([
+  Object.freeze({coachId:'coach_nakase',coachName:'中瀬'}),
+  Object.freeze({coachId:'coach_maki',coachName:'牧'}),
+  Object.freeze({coachId:'coach_kawakami',coachName:'川上'}),
+  Object.freeze({coachId:'coach_hashimoto',coachName:'橋本'})
+]);
 
 
 const STARTUP_CACHE_CONFIG=Object.freeze({
@@ -555,6 +577,7 @@ function renderDetail(e){
       <dt>詳細</dt><dd>${esc(e.note||'')}</dd>
     </dl>
     <div id="attendancePanel">${renderAttendancePanel(e)}</div>
+    <div id="coachAttendancePanel">${renderCoachAttendancePanel(e)}</div>
     <div class="field" style="margin-top:18px">
       <label>写真・ファイル添付</label>
       <div class="upload-row" id="uploadRow">
@@ -565,6 +588,7 @@ function renderDetail(e){
       <div id="attachmentList" class="attachment-list">${renderAttachments(attachments)}</div>
     </div>`;
   bindAttendancePanel(e);
+  bindCoachAttendancePanel(e);
   $('uploadBtn').addEventListener('click',uploadAttachment);
   el.detailView.querySelectorAll('[data-open-attachment]').forEach(btn=>btn.addEventListener('click',()=>openAttachment(btn.dataset.openAttachment)));
   el.detailView.querySelectorAll('[data-delete-attachment]').forEach(btn=>btn.addEventListener('click',()=>deleteAttachment(btn.dataset.deleteAttachment)));
@@ -581,6 +605,238 @@ function renderAttachments(items){
     const thumb=isImg?`<div class="attachment-thumb" style="display:grid;place-items:center">画像</div>`:`<div class="attachment-thumb" style="display:grid;place-items:center">FILE</div>`;
     return `<div class="attachment">${thumb}<div class="attachment-info"><div class="attachment-name">${esc(a.fileName)}</div><div class="attachment-meta">${esc(a.mimeType||'')} / ${formatBytes(a.size||0)}</div></div><button class="btn" style="padding:5px 7px;min-height:30px" data-open-attachment="${esc(a.attachmentId)}">見る</button><button class="btn danger" style="padding:5px 7px;min-height:30px" data-delete-attachment="${esc(a.attachmentId)}">削除</button></div>`;
   }).join('');
+}
+
+function renderCoachAttendancePanel(e){
+  if(!e||!e.scheduleId)return '';
+
+  return `
+    <section class="coach-attendance-card">
+      <h4>コーチ出席</h4>
+      <p class="coach-attendance-note">○・×と必要に応じてコメントを入力してください。</p>
+      <div id="coachAttendanceList" class="coach-attendance-list">
+        ${COACH_ATTENDANCE_ROSTER.map(coach=>`
+          <div class="coach-attendance-row" data-coach-row="${esc(coach.coachId)}">
+            <div class="coach-attendance-top">
+              <div class="coach-attendance-name">${esc(coach.coachName)}</div>
+              <div class="coach-attendance-actions">
+                <button type="button" class="btn coach-attendance-status ok" data-coach-status="○">○</button>
+                <button type="button" class="btn coach-attendance-status ng" data-coach-status="×">×</button>
+              </div>
+            </div>
+            <input
+              type="text"
+              class="coach-attendance-comment"
+              maxlength="500"
+              placeholder="コメント（任意）"
+              aria-label="${esc(coach.coachName)}のコメント">
+            <div class="coach-attendance-save">
+              <div class="status" data-coach-message></div>
+              <button type="button" class="btn primary" data-coach-save>保存</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div id="coachAttendanceLoadStatus" class="status"></div>
+    </section>`;
+}
+
+function bindCoachAttendancePanel(e){
+  if(!e||!e.scheduleId)return;
+
+  const panel=$('coachAttendancePanel');
+  if(!panel)return;
+
+  panel.querySelectorAll('[data-coach-row]').forEach(row=>{
+    row.dataset.selectedStatus='';
+
+    row.querySelectorAll('[data-coach-status]').forEach(button=>{
+      button.addEventListener('click',()=>{
+        const status=button.dataset.coachStatus||'';
+        row.dataset.selectedStatus=status;
+        row.querySelectorAll('[data-coach-status]').forEach(candidate=>{
+          candidate.classList.toggle(
+            'selected',
+            candidate.dataset.coachStatus===status
+          );
+        });
+      });
+    });
+
+    const saveButton=row.querySelector('[data-coach-save]');
+    if(saveButton){
+      saveButton.addEventListener('click',()=>{
+        saveCoachAttendanceRow(
+          e.scheduleId,
+          row
+        );
+      });
+    }
+  });
+
+  loadCoachAttendance(
+    e.scheduleId
+  );
+}
+
+function applyCoachAttendanceRows(scheduleId,rows){
+  if(
+    !state.currentEvent ||
+    state.currentEvent.scheduleId!==scheduleId
+  ){
+    return;
+  }
+
+  const panel=$('coachAttendancePanel');
+  if(!panel)return;
+
+  const list=Array.isArray(rows)?rows:[];
+
+  COACH_ATTENDANCE_ROSTER.forEach(coach=>{
+    const row=panel.querySelector(
+      `[data-coach-row="${coach.coachId}"]`
+    );
+    if(!row)return;
+
+    const saved=list.find(item=>
+      String(item?.coachId||'')===coach.coachId
+    );
+
+    const status=saved?.status==='○'||saved?.status==='×'
+      ? saved.status
+      : '';
+
+    row.dataset.selectedStatus=status;
+
+    row.querySelectorAll('[data-coach-status]').forEach(button=>{
+      button.classList.toggle(
+        'selected',
+        button.dataset.coachStatus===status
+      );
+    });
+
+    const comment=row.querySelector('.coach-attendance-comment');
+    if(comment){
+      comment.value=String(saved?.comment||'');
+    }
+
+    const message=row.querySelector('[data-coach-message]');
+    if(message){
+      showStatus(
+        message,
+        saved?'保存済み':''
+      );
+    }
+  });
+}
+
+async function loadCoachAttendance(scheduleId){
+  const status=$('coachAttendanceLoadStatus');
+  if(status){
+    showStatus(status,'コーチ出席を確認しています…');
+  }
+
+  try{
+    const data=assertOk(await jsonp('coach.app',{
+      op:'coachAttendance.get',
+      token:state.token,
+      scheduleId
+    }));
+
+    const rows=Array.isArray(data)
+      ? data
+      : Array.isArray(data?.rows)
+        ? data.rows
+        : [];
+
+    applyCoachAttendanceRows(
+      scheduleId,
+      rows
+    );
+
+    if(status){
+      showStatus(status,'');
+    }
+  }catch(error){
+    if(status){
+      showStatus(
+        status,
+        error.message,
+        'error'
+      );
+    }
+  }
+}
+
+async function saveCoachAttendanceRow(scheduleId,row){
+  if(!scheduleId||!row)return;
+
+  const coachId=row.dataset.coachRow||'';
+  const coach=COACH_ATTENDANCE_ROSTER.find(item=>
+    item.coachId===coachId
+  );
+
+  const message=row.querySelector('[data-coach-message]');
+  const saveButton=row.querySelector('[data-coach-save]');
+  const commentInput=row.querySelector('.coach-attendance-comment');
+  const status=row.dataset.selectedStatus||'';
+
+  if(!coach){
+    showStatus(message,'コーチ情報が正しくありません。','error');
+    return;
+  }
+
+  if(status!=='○'&&status!=='×'){
+    showStatus(message,'○または×を選択してください。','error');
+    return;
+  }
+
+  const comment=String(commentInput?.value||'').trim();
+
+  if(comment.length>500){
+    showStatus(message,'コメントは500文字以内です。','error');
+    return;
+  }
+
+  if(saveButton)saveButton.disabled=true;
+  showStatus(message,'保存中…');
+
+  try{
+    const data=assertOk(await jsonp('coach.app',{
+      op:'coachAttendance.save',
+      token:state.token,
+      data:JSON.stringify({
+        scheduleId,
+        coachId:coach.coachId,
+        coachName:coach.coachName,
+        status,
+        comment
+      })
+    }));
+
+    const saved=data?.attendance||data;
+
+    if(saved&&saved.status){
+      row.dataset.selectedStatus=saved.status;
+      row.querySelectorAll('[data-coach-status]').forEach(button=>{
+        button.classList.toggle(
+          'selected',
+          button.dataset.coachStatus===saved.status
+        );
+      });
+
+      if(commentInput){
+        commentInput.value=String(saved.comment||'');
+      }
+    }
+
+    showStatus(message,'保存済み','ok');
+    toast(`${coach.coachName}の出席を保存しました。`);
+  }catch(error){
+    showStatus(message,error.message,'error');
+  }finally{
+    if(saveButton)saveButton.disabled=false;
+  }
 }
 
 function renderAttendancePanel(e){
