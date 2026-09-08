@@ -142,7 +142,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.29-coach-attendance-entry-v12.3</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.30-coach-master-v12.3</div></div>
         <div class="actions">
           <button id="coachAttendanceBtn" class="btn">コーチ出席</button>
           <button id="newBtn" class="btn primary">＋追加</button>
@@ -187,8 +187,39 @@
         <div id="coachAttendanceEntryBody"></div>
       </div>
       <div class="dialogfoot">
+        <button type="button" id="manageCoachesBtn" class="btn">コーチ管理</button>
         <span class="spacer"></span>
         <button type="button" id="closeCoachAttendanceFootBtn" class="btn">閉じる</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="coachMasterModal" class="modal" aria-hidden="true">
+    <section class="dialog">
+      <div class="dialoghead">
+        <h3>コーチ管理</h3>
+        <button type="button" id="closeCoachMasterBtn" class="close">×</button>
+      </div>
+      <div class="dialogbody">
+        <div class="attendance-card" style="margin-top:0">
+          <h4>コーチ追加</h4>
+          <div class="field">
+            <label for="newCoachName">コーチ名 *</label>
+            <input id="newCoachName" type="text" maxlength="100" placeholder="例：山田">
+          </div>
+          <button type="button" id="addCoachBtn" class="btn primary">追加</button>
+          <div id="addCoachStatus" class="status"></div>
+        </div>
+
+        <div class="attendance-card">
+          <h4>登録済みコーチ</h4>
+          <div id="coachMasterList" class="coach-attendance-list"></div>
+          <div id="coachMasterStatus" class="status"></div>
+        </div>
+      </div>
+      <div class="dialogfoot">
+        <span class="spacer"></span>
+        <button type="button" id="closeCoachMasterFootBtn" class="btn">閉じる</button>
       </div>
     </section>
   </div>
@@ -279,12 +310,6 @@ const SCHEDULE_COLORS=[
   '#4338ca'  // インディゴ
 ];
 
-const COACH_ATTENDANCE_ROSTER=Object.freeze([
-  Object.freeze({coachId:'coach_nakase',coachName:'中瀬'}),
-  Object.freeze({coachId:'coach_maki',coachName:'牧'}),
-  Object.freeze({coachId:'coach_kawakami',coachName:'川上'}),
-  Object.freeze({coachId:'coach_hashimoto',coachName:'橋本'})
-]);
 
 
 const STARTUP_CACHE_CONFIG=Object.freeze({
@@ -378,6 +403,9 @@ const state={
   monthRequests:new Map(),
   attendanceMonthCache:new Map(),
   attendanceMonthRequests:new Map(),
+  coachMasterActive:[],
+  coachMasterAll:[],
+  coachMasterLoadedAt:0,
   pendingUpserts:new Map(),
   deletedScheduleIds:new Set(),
   prefetchQueue:[],
@@ -628,6 +656,223 @@ function renderAttachments(items){
   }).join('');
 }
 
+async function loadCoachMaster({force=false,all=false}={}){
+  const now=Date.now();
+  const cacheFresh=
+    !force &&
+    state.coachMasterLoadedAt &&
+    now-state.coachMasterLoadedAt<60000;
+
+  if(cacheFresh){
+    return all ? state.coachMasterAll : state.coachMasterActive;
+  }
+
+  const [activeData,allData]=await Promise.all([
+    jsonp('coach.app',{
+      op:'coachMaster.listActive',
+      token:state.token
+    }),
+    jsonp('coach.app',{
+      op:'coachMaster.listAll',
+      token:state.token
+    })
+  ]);
+
+  state.coachMasterActive=assertOk(activeData);
+  state.coachMasterAll=assertOk(allData);
+
+  if(!Array.isArray(state.coachMasterActive))state.coachMasterActive=[];
+  if(!Array.isArray(state.coachMasterAll))state.coachMasterAll=[];
+
+  state.coachMasterActive.sort((a,b)=>
+    (Number(a.sortOrder)||9999)-(Number(b.sortOrder)||9999)
+  );
+  state.coachMasterAll.sort((a,b)=>
+    (Number(a.sortOrder)||9999)-(Number(b.sortOrder)||9999)
+  );
+
+  state.coachMasterLoadedAt=now;
+
+  return all ? state.coachMasterAll : state.coachMasterActive;
+}
+
+function invalidateCoachMasterCache(){
+  state.coachMasterLoadedAt=0;
+  state.coachMasterActive=[];
+  state.coachMasterAll=[];
+}
+
+async function openCoachMasterManagement(){
+  const modal=$('coachMasterModal');
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden','false');
+
+  showStatus($('coachMasterStatus'),'読み込み中…');
+
+  try{
+    await loadCoachMaster({force:true,all:true});
+    renderCoachMasterManagement();
+    showStatus($('coachMasterStatus'),'');
+  }catch(error){
+    showStatus($('coachMasterStatus'),error.message,'error');
+  }
+}
+
+function closeCoachMasterManagement(){
+  const modal=$('coachMasterModal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden','true');
+}
+
+function renderCoachMasterManagement(){
+  const list=$('coachMasterList');
+  const coaches=Array.isArray(state.coachMasterAll)
+    ? state.coachMasterAll
+    : [];
+
+  if(!coaches.length){
+    list.innerHTML='<div class="attendance-empty">登録されているコーチはいません。</div>';
+    return;
+  }
+
+  list.innerHTML=coaches.map(coach=>`
+    <div class="coach-attendance-row" data-master-coach-id="${esc(coach.coachId)}">
+      <div class="attendance-row-line">
+        <strong>${esc(coach.coachName)}</strong>
+        <span class="status-badge ${
+          coach.active ? 'status-present' : 'status-unanswered'
+        }">${coach.active?'使用中':'非表示'}</span>
+      </div>
+
+      <div class="field" style="margin-top:8px">
+        <label>名前</label>
+        <input
+          type="text"
+          data-master-name
+          maxlength="100"
+          value="${esc(coach.coachName)}">
+      </div>
+
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <button type="button" class="btn" data-master-rename>名前変更</button>
+        <button type="button" class="btn ${coach.active?'danger':'primary'}" data-master-active>
+          ${coach.active?'非表示にする':'使用する'}
+        </button>
+      </div>
+
+      <div class="status" data-master-message></div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('[data-master-coach-id]').forEach(row=>{
+    const coachId=row.dataset.masterCoachId;
+    const coach=coaches.find(item=>item.coachId===coachId);
+    if(!coach)return;
+
+    row.querySelector('[data-master-rename]').addEventListener('click',()=>{
+      renameCoachMasterRow(row,coach);
+    });
+
+    row.querySelector('[data-master-active]').addEventListener('click',()=>{
+      toggleCoachMasterActive(row,coach);
+    });
+  });
+}
+
+async function createCoachMaster(){
+  const input=$('newCoachName');
+  const status=$('addCoachStatus');
+  const button=$('addCoachBtn');
+  const coachName=String(input.value||'').trim();
+
+  if(!coachName){
+    showStatus(status,'コーチ名を入力してください。','error');
+    return;
+  }
+
+  button.disabled=true;
+  showStatus(status,'追加中…');
+
+  try{
+    assertOk(await jsonp('coach.app',{
+      op:'coachMaster.create',
+      token:state.token,
+      data:JSON.stringify({coachName})
+    }));
+
+    input.value='';
+    invalidateCoachMasterCache();
+    await loadCoachMaster({force:true,all:true});
+    renderCoachMasterManagement();
+    showStatus(status,'追加しました。','ok');
+    toast('コーチを追加しました。');
+  }catch(error){
+    showStatus(status,error.message,'error');
+  }finally{
+    button.disabled=false;
+  }
+}
+
+async function renameCoachMasterRow(row,coach){
+  const input=row.querySelector('[data-master-name]');
+  const message=row.querySelector('[data-master-message]');
+  const coachName=String(input.value||'').trim();
+
+  if(!coachName){
+    showStatus(message,'コーチ名を入力してください。','error');
+    return;
+  }
+
+  try{
+    showStatus(message,'更新中…');
+
+    assertOk(await jsonp('coach.app',{
+      op:'coachMaster.rename',
+      token:state.token,
+      data:JSON.stringify({
+        coachId:coach.coachId,
+        coachName
+      })
+    }));
+
+    invalidateCoachMasterCache();
+    await loadCoachMaster({force:true,all:true});
+    renderCoachMasterManagement();
+    showStatus($('coachMasterStatus'),'名前を変更しました。','ok');
+    toast('コーチ名を変更しました。');
+  }catch(error){
+    showStatus(message,error.message,'error');
+  }
+}
+
+async function toggleCoachMasterActive(row,coach){
+  const message=row.querySelector('[data-master-message]');
+
+  try{
+    showStatus(message,'更新中…');
+
+    assertOk(await jsonp('coach.app',{
+      op:'coachMaster.setActive',
+      token:state.token,
+      data:JSON.stringify({
+        coachId:coach.coachId,
+        active:!coach.active
+      })
+    }));
+
+    invalidateCoachMasterCache();
+    await loadCoachMaster({force:true,all:true});
+    renderCoachMasterManagement();
+    showStatus(
+      $('coachMasterStatus'),
+      coach.active?'非表示にしました。':'使用中に戻しました。',
+      'ok'
+    );
+  }catch(error){
+    showStatus(message,error.message,'error');
+  }
+}
+
 function renderCoachAttendanceResultPanel(e){
   if(!e||!e.scheduleId)return '';
 
@@ -649,16 +894,55 @@ function renderCoachAttendanceResultRows(scheduleId,rows){
   const box=$('coachAttendanceResult');
   if(!box)return;
 
-  const list=Array.isArray(rows)?rows:[];
+  const attendanceRows=Array.isArray(rows)?rows:[];
+  const masterRows=Array.isArray(state.coachMasterAll)
+    ? state.coachMasterAll
+    : [];
+
+  const masterById=new Map(
+    masterRows.map(coach=>[String(coach.coachId||''),coach])
+  );
+
+  const displayRows=[];
+
+  masterRows.forEach(coach=>{
+    const saved=attendanceRows.find(item=>
+      String(item?.coachId||'')===String(coach.coachId||'')
+    );
+
+    if(coach.active || saved){
+      displayRows.push({
+        coachId:coach.coachId,
+        coachName:coach.coachName,
+        active:!!coach.active,
+        saved
+      });
+    }
+  });
+
+  attendanceRows.forEach(saved=>{
+    const coachId=String(saved?.coachId||'');
+    if(coachId && !masterById.has(coachId)){
+      displayRows.push({
+        coachId,
+        coachName:String(saved?.coachName||'コーチ'),
+        active:false,
+        saved
+      });
+    }
+  });
 
   box.className='';
 
+  if(!displayRows.length){
+    box.innerHTML='<div class="attendance-empty">コーチ出席結果はありません。</div>';
+    return;
+  }
+
   box.innerHTML=`
     <div class="coach-attendance-list">
-      ${COACH_ATTENDANCE_ROSTER.map(coach=>{
-        const saved=list.find(item=>
-          String(item?.coachId||'')===coach.coachId
-        );
+      ${displayRows.map(item=>{
+        const saved=item.saved;
         const status=saved?.status==='○'||saved?.status==='×'
           ? saved.status
           : '未回答';
@@ -667,7 +951,7 @@ function renderCoachAttendanceResultRows(scheduleId,rows){
         return `
           <div class="coach-attendance-row">
             <div class="attendance-row-line">
-              <strong>${esc(coach.coachName)}</strong>
+              <strong>${esc(item.coachName)}</strong>
               <span class="status-badge ${
                 status==='○'
                   ? 'status-present'
@@ -687,6 +971,8 @@ async function loadCoachAttendanceResult(scheduleId){
   if(!box)return;
 
   try{
+    await loadCoachMaster({all:true});
+
     const data=assertOk(await jsonp('coach.app',{
       op:'coachAttendance.get',
       token:state.token,
@@ -724,39 +1010,47 @@ function coachAttendanceScheduleLabel(event){
   ].filter(Boolean).join(' ');
 }
 
-function openCoachAttendanceEntry(){
+async function openCoachAttendanceEntry(){
   const modal=$('coachAttendanceModal');
   const select=$('coachAttendanceScheduleSelect');
   const body=$('coachAttendanceEntryBody');
 
-  const events=[...state.events].sort((a,b)=>{
-    const dateCompare=String(a.date||'').localeCompare(String(b.date||''));
-    if(dateCompare!==0)return dateCompare;
-    return String(a.startTime||'').localeCompare(String(b.startTime||''));
-  });
-
-  if(!events.length){
-    select.innerHTML='<option value="">この月の予定はありません</option>';
-    select.disabled=true;
-    body.innerHTML='<div class="status">コーチ出席を入力できる予定がありません。</div>';
-  }else{
-    select.disabled=false;
-    select.innerHTML=events.map(event=>`
-      <option value="${esc(event.scheduleId)}">${esc(coachAttendanceScheduleLabel(event))}</option>
-    `).join('');
-
-    const todayEvent=events.find(event=>event.date===todayKey());
-    if(todayEvent){
-      select.value=todayEvent.scheduleId;
-    }
-
-    renderCoachAttendanceEntry(
-      select.value
-    );
-  }
-
   modal.classList.add('open');
   modal.setAttribute('aria-hidden','false');
+
+  body.innerHTML='<div class="status">コーチ名簿を読み込んでいます…</div>';
+
+  try{
+    await loadCoachMaster({force:true});
+
+    const events=[...state.events].sort((a,b)=>{
+      const dateCompare=String(a.date||'').localeCompare(String(b.date||''));
+      if(dateCompare!==0)return dateCompare;
+      return String(a.startTime||'').localeCompare(String(b.startTime||''));
+    });
+
+    if(!events.length){
+      select.innerHTML='<option value="">この月の予定はありません</option>';
+      select.disabled=true;
+      body.innerHTML='<div class="status">コーチ出席を入力できる予定がありません。</div>';
+    }else{
+      select.disabled=false;
+      select.innerHTML=events.map(event=>`
+        <option value="${esc(event.scheduleId)}">${esc(coachAttendanceScheduleLabel(event))}</option>
+      `).join('');
+
+      const todayEvent=events.find(event=>event.date===todayKey());
+      if(todayEvent){
+        select.value=todayEvent.scheduleId;
+      }
+
+      renderCoachAttendanceEntry(
+        select.value
+      );
+    }
+  }catch(error){
+    body.innerHTML=`<div class="status error">${esc(error.message)}</div>`;
+  }
 }
 
 function closeCoachAttendanceEntry(){
@@ -781,7 +1075,7 @@ function renderCoachAttendanceEntry(scheduleId){
         ${esc(coachAttendanceScheduleLabel(event))}
       </p>
       <div id="coachAttendanceEntryList" class="coach-attendance-list">
-        ${COACH_ATTENDANCE_ROSTER.map(coach=>`
+        ${state.coachMasterActive.map(coach=>`
           <div class="coach-attendance-row" data-coach-row="${esc(coach.coachId)}">
             <div class="coach-attendance-top">
               <div class="coach-attendance-name">${esc(coach.coachName)}</div>
@@ -855,7 +1149,7 @@ function applyCoachAttendanceEntryRows(scheduleId,rows){
   const body=$('coachAttendanceEntryBody');
   const list=Array.isArray(rows)?rows:[];
 
-  COACH_ATTENDANCE_ROSTER.forEach(coach=>{
+  state.coachMasterActive.forEach(coach=>{
     const row=body.querySelector(
       `[data-coach-row="${coach.coachId}"]`
     );
@@ -935,7 +1229,7 @@ async function saveCoachAttendanceRow(scheduleId,row){
   if(!scheduleId||!row)return;
 
   const coachId=row.dataset.coachRow||'';
-  const coach=COACH_ATTENDANCE_ROSTER.find(item=>
+  const coach=state.coachMasterActive.find(item=>
     item.coachId===coachId
   );
 
@@ -1979,6 +2273,7 @@ function logout(callApi=true){
   clearStartupMonthCaches();
   state.monthCache.clear();
   state.attendanceMonthCache.clear();
+  invalidateCoachMasterCache();
   el.appView.classList.add('hidden');
   el.loginView.classList.remove('hidden');
   el.password.value='';
@@ -1994,6 +2289,10 @@ async function init(){
   $('coachAttendanceBtn').onclick=openCoachAttendanceEntry;
   $('closeCoachAttendanceBtn').onclick=closeCoachAttendanceEntry;
   $('closeCoachAttendanceFootBtn').onclick=closeCoachAttendanceEntry;
+  $('manageCoachesBtn').onclick=openCoachMasterManagement;
+  $('closeCoachMasterBtn').onclick=closeCoachMasterManagement;
+  $('closeCoachMasterFootBtn').onclick=closeCoachMasterManagement;
+  $('addCoachBtn').onclick=createCoachMaster;
   $('coachAttendanceScheduleSelect').onchange=event=>{
     renderCoachAttendanceEntry(event.target.value);
   };
@@ -2017,6 +2316,10 @@ async function init(){
 
   $('coachAttendanceModal').addEventListener('click',e=>{
     if(e.target===$('coachAttendanceModal'))closeCoachAttendanceEntry();
+  });
+
+  $('coachMasterModal').addEventListener('click',e=>{
+    if(e.target===$('coachMasterModal'))closeCoachMasterManagement();
   });
 
   el.dayListModal.addEventListener('click',e=>{
