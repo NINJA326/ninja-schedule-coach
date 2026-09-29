@@ -384,6 +384,35 @@
       }
     }
 
+  
+    /* STEP163: draft attachment buttons */
+    .draft-attachments{
+      display:grid;
+      gap:5px;
+      margin:2px 0 4px;
+    }
+    .draft-attachment-row{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+    .draft-attachment-btn{
+      min-height:30px!important;
+      padding:5px 9px!important;
+      border-radius:8px!important;
+      font-size:12px!important;
+      line-height:1.1!important;
+      white-space:nowrap;
+    }
+    .draft-attachment-status{
+      min-height:0!important;
+      padding:0!important;
+      font-size:10.5px!important;
+      line-height:1.4!important;
+      color:var(--muted);
+    }
+
   </style>
 </head>
 <body>
@@ -400,7 +429,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.34-coach-compact-inputs-v12.3</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.35-coach-draft-attachments-v12.3</div></div>
         <div class="actions">
           <button id="coachAttendanceBtn" class="btn">コーチ出席</button>
           <button id="newBtn" class="btn primary">＋追加</button>
@@ -499,6 +528,15 @@
         <label class="category-choice" style="width:max-content"><input id="allDay" type="checkbox">終日</label>
         <div id="timeFields" class="grid2"><div class="field"><label>開始</label><input id="startTime" type="text" inputmode="numeric" maxlength="5" placeholder="00:00"></div><div class="field"><label>終了</label><input id="endTime" type="text" inputmode="numeric" maxlength="5" placeholder="00:00"></div></div>
         <div class="field"><label>詳細</label><textarea id="note"></textarea></div>
+        <div class="draft-attachments" aria-label="添付">
+          <div class="draft-attachment-row">
+            <button type="button" id="selectImagesBtn" class="btn draft-attachment-btn">画像添付</button>
+            <button type="button" id="selectFilesBtn" class="btn draft-attachment-btn">ファイル添付</button>
+            <span id="draftAttachmentStatus" class="draft-attachment-status">画像0/5・ファイル0/5</span>
+          </div>
+          <input id="draftImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden">
+          <input id="draftFileInput" type="file" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple class="hidden">
+        </div>
         <div class="attendance-card">
           <label class="category-choice" style="width:max-content"><input id="attendanceEnabled" type="checkbox">出欠回答を必須にする</label>
           <div id="attendanceAutoNote" class="status"></div>
@@ -670,6 +708,8 @@ const state={
   prefetchBusy:false,
   prefetchTimer:null,
   saveInFlight:false,
+  draftImages:[],
+  draftFiles:[],
   swipeStartX:0,
   swipeStartY:0
 };
@@ -839,8 +879,86 @@ function updateColorSelection(){
     btn.classList.toggle('selected',btn.dataset.color===state.selectedColor);
   });
 }
+
+function resetDraftAttachments(){
+  state.draftImages=[];
+  state.draftFiles=[];
+
+  const imageInput=$('draftImageInput');
+  const fileInput=$('draftFileInput');
+
+  if(imageInput)imageInput.value='';
+  if(fileInput)fileInput.value='';
+
+  updateDraftAttachmentStatus();
+}
+
+function updateDraftAttachmentStatus(){
+  const status=$('draftAttachmentStatus');
+  if(!status)return;
+
+  status.textContent=`画像${state.draftImages.length}/5・ファイル${state.draftFiles.length}/5`;
+}
+
+function addDraftFiles(kind,fileList){
+  const incoming=[...(fileList||[])];
+
+  if(!incoming.length)return;
+
+  const current=kind==='image'
+    ? state.draftImages
+    : state.draftFiles;
+
+  const max=5;
+  const remaining=max-current.length;
+
+  if(remaining<=0){
+    toast(kind==='image'?'画像は5個までです。':'ファイルは5個までです。');
+    updateDraftAttachmentStatus();
+    return;
+  }
+
+  current.push(...incoming.slice(0,remaining));
+
+  if(incoming.length>remaining){
+    toast(kind==='image'?'画像は5個までです。':'ファイルは5個までです。');
+  }
+
+  updateDraftAttachmentStatus();
+}
+
+function bindDraftAttachmentInputs(){
+  const imageButton=$('selectImagesBtn');
+  const fileButton=$('selectFilesBtn');
+  const imageInput=$('draftImageInput');
+  const fileInput=$('draftFileInput');
+
+  if(imageButton&&imageInput){
+    imageButton.addEventListener('click',()=>{
+      imageInput.click();
+    });
+
+    imageInput.addEventListener('change',()=>{
+      addDraftFiles('image',imageInput.files);
+      imageInput.value='';
+    });
+  }
+
+  if(fileButton&&fileInput){
+    fileButton.addEventListener('click',()=>{
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change',()=>{
+      addDraftFiles('file',fileInput.files);
+      fileInput.value='';
+    });
+  }
+}
+
 function selectedCategories(){return [...document.querySelectorAll('input[name=category]:checked')].map(x=>x.value)}
 function fillForm(e){
+  resetDraftAttachments();
   $('scheduleId').value=e?.scheduleId||'';
   $('sourceRef').value=e?.sourceRef||'';
   $('date').value=e?.date||todayKey();
@@ -2241,6 +2359,9 @@ async function saveEvent(){
   const newMonth=date.slice(0,7);
   const previousEvents=[...state.events];
 
+  const draftImages=[...state.draftImages];
+  const draftFiles=[...state.draftFiles];
+
   state.saveInFlight=true;
   state.pendingUpserts.set(optimisticId,optimisticEvent);
 
@@ -2318,6 +2439,25 @@ async function saveEvent(){
      * ここでは月データの再取得を行わない。
      * 不要な通信・再描画・体感ラグを防ぐ。
      */
+    if(draftImages.length||draftFiles.length){
+
+      uploadDraftAttachments(
+
+        fresh.scheduleId,
+
+        draftImages,
+
+        draftFiles
+
+      ).catch(error=>{
+
+        toast('添付を保存できませんでした：'+error.message);
+
+      });
+
+    }
+
+
     // 保存成功時の完了メッセージは出さない。
   }catch(e){
     state.pendingUpserts.delete(optimisticId);
@@ -2376,24 +2516,55 @@ async function deleteCurrent(){
     toast('削除できませんでした：'+e.message);
   }
 }
+
+async function uploadFileToSchedule(scheduleId,file){
+  const processed=await prepareFile(file);
+  const uploadId='up_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+
+  await fetch(state.apiUrl,{
+    method:'POST',mode:'no-cors',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({
+      action:'uploadAttachment',
+      uploadId,
+      token:state.token,
+      scheduleId,
+      fileName:processed.name,
+      mimeType:processed.type,
+      base64:processed.base64
+    })
+  });
+
+  const result=await pollUpload(uploadId);
+  assertOk(result);
+
+  return result;
+}
+
+async function uploadDraftAttachments(scheduleId,images,files){
+  const imageList=Array.isArray(images)?images:[];
+  const fileList=Array.isArray(files)?files:[];
+  const all=[...imageList,...fileList];
+
+  if(!scheduleId||!all.length)return;
+
+  let successCount=0;
+
+  for(const file of all){
+    await uploadFileToSchedule(scheduleId,file);
+    successCount+=1;
+  }
+
+  toast(`${successCount}個の添付を保存しました。`);
+}
+
 async function uploadAttachment(){
   const input=$('attachmentInput'),file=input.files&&input.files[0],status=$('uploadStatus');
   if(!state.currentEvent||!state.currentEvent.scheduleId){showStatus(status,'先に予定を保存してください。','error');return}
   if(!file){showStatus(status,'添付するファイルを選択してください。','error');return}
   try{
-    const processed=await prepareFile(file);
-    const uploadId='up_'+Date.now()+'_'+Math.random().toString(36).slice(2);
     showStatus(status,'アップロード中…');
-    await fetch(state.apiUrl,{
-      method:'POST',mode:'no-cors',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({
-        action:'uploadAttachment',uploadId,token:state.token,scheduleId:state.currentEvent.scheduleId,
-        fileName:processed.name,mimeType:processed.type,base64:processed.base64
-      })
-    });
-    const result=await pollUpload(uploadId);
-    assertOk(result);
+    await uploadFileToSchedule(state.currentEvent.scheduleId,file);
     showStatus(status,'添付しました。','ok');
     const fresh=assertOk(await jsonp('event',{token:state.token,scheduleId:state.currentEvent.scheduleId}));
     renderDetail(fresh.event);
@@ -2563,6 +2734,7 @@ function logout(callApi=true){
 async function init(){
   buildSelectors();
   bindCompactTimeInputs();
+  bindDraftAttachmentInputs();
   bindCalendarSwipe();
   state.selectedDate=todayKey();
   el.apiUrl.value=state.apiUrl;
