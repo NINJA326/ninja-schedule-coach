@@ -413,6 +413,148 @@
       color:var(--muted);
     }
 
+  
+    /* STEP164: readable boxes and attachment preview */
+    .dialog{
+      max-height:96dvh!important;
+    }
+    .dialogbody{
+      overflow-y:auto!important;
+      -webkit-overflow-scrolling:touch;
+      padding-bottom:18px!important;
+    }
+    #eventForm{
+      gap:8px!important;
+      padding-bottom:16px!important;
+    }
+    #eventForm .field{
+      margin:3px 0!important;
+      gap:5px!important;
+    }
+    #eventForm .field input,
+    #eventForm .field select,
+    #eventForm .field textarea{
+      min-height:38px!important;
+      padding:8px 10px!important;
+      border-radius:9px!important;
+    }
+    #eventForm .field textarea{
+      min-height:64px!important;
+    }
+    #categoryChoices.category-box{
+      grid-template-columns:repeat(3,minmax(0,1fr))!important;
+      gap:6px!important;
+    }
+    #categoryChoices .category-choice{
+      min-height:34px!important;
+      padding:6px 8px!important;
+      border-radius:9px!important;
+      font-size:11px!important;
+      background:#09182a!important;
+      border:1px solid var(--line)!important;
+    }
+    .draft-attachments{
+      margin:4px 0 6px!important;
+      padding:8px!important;
+      border:1px solid var(--line)!important;
+      background:#09182a!important;
+      border-radius:10px!important;
+    }
+    .draft-attachment-row{
+      gap:7px!important;
+    }
+    .draft-attachment-btn{
+      min-height:32px!important;
+      padding:6px 10px!important;
+      font-size:12px!important;
+      font-weight:800!important;
+    }
+    .draft-attachment-status{
+      font-size:10.5px!important;
+      color:var(--muted)!important;
+    }
+    .draft-attachment-preview{
+      margin-top:7px;
+      display:grid;
+      gap:7px;
+    }
+    .draft-attachment-empty{
+      color:var(--muted);
+      font-size:10.5px;
+      line-height:1.5;
+    }
+    .draft-image-grid{
+      display:flex;
+      gap:7px;
+      flex-wrap:wrap;
+    }
+    .draft-image-chip{
+      width:58px;
+      height:58px;
+      position:relative;
+      border:1px solid var(--line);
+      border-radius:8px;
+      overflow:hidden;
+      background:#071425;
+    }
+    .draft-image-thumb{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .draft-file-list{
+      display:grid;
+      gap:6px;
+    }
+    .draft-file-chip{
+      display:grid;
+      grid-template-columns:auto minmax(0,1fr) auto auto;
+      align-items:center;
+      gap:6px;
+      min-height:32px;
+      padding:5px 7px;
+      border:1px solid var(--line);
+      background:#071425;
+      border-radius:8px;
+      font-size:11px;
+    }
+    .draft-file-icon{
+      line-height:1;
+    }
+    .draft-file-name{
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      font-weight:800;
+    }
+    .draft-file-size{
+      color:var(--muted);
+      font-size:10px;
+      white-space:nowrap;
+    }
+    .draft-remove{
+      width:20px;
+      height:20px;
+      border:0;
+      border-radius:999px;
+      background:rgba(15,23,42,.82);
+      color:#fff;
+      font-size:14px;
+      line-height:20px;
+      padding:0;
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+    }
+    .draft-image-chip .draft-remove{
+      position:absolute;
+      top:2px;
+      right:2px;
+      background:rgba(2,6,23,.72);
+    }
+
   </style>
 </head>
 <body>
@@ -429,7 +571,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.35-coach-draft-attachments-v12.3</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.36-coach-attachment-preview-v12.3</div></div>
         <div class="actions">
           <button id="coachAttendanceBtn" class="btn">コーチ出席</button>
           <button id="newBtn" class="btn primary">＋追加</button>
@@ -534,7 +676,8 @@
             <button type="button" id="selectFilesBtn" class="btn draft-attachment-btn">ファイル添付</button>
             <span id="draftAttachmentStatus" class="draft-attachment-status">画像0/5・ファイル0/5</span>
           </div>
-          <input id="draftImageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple class="hidden">
+          <div id="draftAttachmentPreview" class="draft-attachment-preview"></div>
+          <input id="draftImageInput" type="file" accept="image/*" multiple class="hidden">
           <input id="draftFileInput" type="file" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple class="hidden">
         </div>
         <div class="attendance-card">
@@ -710,6 +853,7 @@ const state={
   saveInFlight:false,
   draftImages:[],
   draftFiles:[],
+  draftPreviewUrls:[],
   swipeStartX:0,
   swipeStartY:0
 };
@@ -880,7 +1024,19 @@ function updateColorSelection(){
   });
 }
 
+function cleanupDraftPreviewUrls(){
+  (state.draftPreviewUrls||[]).forEach(url=>{
+    try{
+      URL.revokeObjectURL(url);
+    }catch(e){}
+  });
+
+  state.draftPreviewUrls=[];
+}
+
 function resetDraftAttachments(){
+  cleanupDraftPreviewUrls();
+
   state.draftImages=[];
   state.draftFiles=[];
 
@@ -895,9 +1051,82 @@ function resetDraftAttachments(){
 
 function updateDraftAttachmentStatus(){
   const status=$('draftAttachmentStatus');
-  if(!status)return;
+  if(status){
+    status.textContent=`画像${state.draftImages.length}/5・ファイル${state.draftFiles.length}/5`;
+  }
 
-  status.textContent=`画像${state.draftImages.length}/5・ファイル${state.draftFiles.length}/5`;
+  renderDraftAttachmentPreview();
+}
+
+function attachmentFileSizeText(file){
+  const size=Number(file&&file.size)||0;
+
+  if(size<1024)return size+'B';
+  if(size<1024*1024)return (size/1024).toFixed(1)+'KB';
+
+  return (size/1024/1024).toFixed(1)+'MB';
+}
+
+function renderDraftAttachmentPreview(){
+  const box=$('draftAttachmentPreview');
+  if(!box)return;
+
+  cleanupDraftPreviewUrls();
+
+  const images=Array.isArray(state.draftImages)
+    ? state.draftImages
+    : [];
+
+  const files=Array.isArray(state.draftFiles)
+    ? state.draftFiles
+    : [];
+
+  if(!images.length&&!files.length){
+    box.innerHTML='<div class="draft-attachment-empty">選択した画像・ファイルはここに表示されます。</div>';
+    return;
+  }
+
+  const imageHtml=images.map((file,index)=>{
+    const url=URL.createObjectURL(file);
+    state.draftPreviewUrls.push(url);
+
+    return `
+      <div class="draft-image-chip">
+        <img src="${url}" alt="${esc(file.name||'画像')}" class="draft-image-thumb">
+        <button type="button" class="draft-remove" data-draft-remove="image" data-draft-index="${index}" aria-label="画像を削除">×</button>
+      </div>`;
+  }).join('');
+
+  const fileHtml=files.map((file,index)=>`
+    <div class="draft-file-chip">
+      <span class="draft-file-icon">📄</span>
+      <span class="draft-file-name">${esc(file.name||'ファイル')}</span>
+      <span class="draft-file-size">${esc(attachmentFileSizeText(file))}</span>
+      <button type="button" class="draft-remove" data-draft-remove="file" data-draft-index="${index}" aria-label="ファイルを削除">×</button>
+    </div>
+  `).join('');
+
+  box.innerHTML=`
+    ${images.length?`<div class="draft-image-grid">${imageHtml}</div>`:''}
+    ${files.length?`<div class="draft-file-list">${fileHtml}</div>`:''}
+  `;
+
+  box.querySelectorAll('[data-draft-remove]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      const kind=button.dataset.draftRemove;
+      const index=Number(button.dataset.draftIndex);
+
+      if(kind==='image'){
+        state.draftImages.splice(index,1);
+      }
+
+      if(kind==='file'){
+        state.draftFiles.splice(index,1);
+      }
+
+      updateDraftAttachmentStatus();
+    });
+  });
 }
 
 function addDraftFiles(kind,fileList){
