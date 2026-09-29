@@ -267,6 +267,123 @@
       }
     }
 
+  
+    /* STEP162: category buttons / nested boxes / iOS time input overflow fix */
+    #eventForm{
+      gap:5px!important;
+    }
+    #eventForm .field{
+      margin:1px 0!important;
+      gap:3px!important;
+    }
+    #eventForm .field label{
+      font-size:10.5px!important;
+      line-height:1.2!important;
+    }
+    #eventForm .field input,
+    #eventForm .field select,
+    #eventForm .field textarea{
+      min-height:32px!important;
+      padding:6px 9px!important;
+      font-size:14px!important;
+      line-height:1.25!important;
+      -webkit-appearance:none;
+      appearance:none;
+    }
+    #eventForm .field textarea{
+      min-height:48px!important;
+    }
+    #categoryChoices.category-box{
+      grid-template-columns:repeat(3,minmax(0,1fr))!important;
+      gap:5px!important;
+    }
+    #categoryChoices .category-choice{
+      min-height:28px!important;
+      padding:4px 6px!important;
+      gap:5px!important;
+      font-size:10.5px!important;
+      line-height:1.1!important;
+      font-weight:800!important;
+      white-space:nowrap!important;
+      overflow:hidden!important;
+    }
+    .category-choice input[type=checkbox]{
+      -webkit-appearance:none!important;
+      appearance:none!important;
+      width:15px!important;
+      height:15px!important;
+      min-width:15px!important;
+      min-height:15px!important;
+      margin:0!important;
+      border:1.5px solid #cbd5e1!important;
+      border-radius:5px!important;
+      background:#f8fafc!important;
+      display:inline-grid!important;
+      place-content:center!important;
+      flex:0 0 15px!important;
+    }
+    .category-choice input[type=checkbox]:checked{
+      background:#2563eb!important;
+      border-color:#60a5fa!important;
+    }
+    .category-choice input[type=checkbox]:checked::before{
+      content:'';
+      width:7px;
+      height:4px;
+      border-left:2px solid white;
+      border-bottom:2px solid white;
+      transform:rotate(-45deg);
+      margin-top:-1px;
+    }
+    #timeFields,
+    #deadlineFields{
+      grid-template-columns:repeat(2,minmax(0,1fr))!important;
+      gap:6px!important;
+      overflow:hidden!important;
+    }
+    #startTime,
+    #endTime,
+    #deadlineTime{
+      text-align:center!important;
+      letter-spacing:.02em!important;
+      max-width:100%!important;
+    }
+    #eventForm .attendance-card{
+      margin-top:4px!important;
+      padding:0!important;
+      border:0!important;
+      background:transparent!important;
+      box-shadow:none!important;
+    }
+    #eventForm .attendance-card .category-choice{
+      width:max-content!important;
+      max-width:100%!important;
+      min-height:25px!important;
+      padding:0!important;
+      border:0!important;
+      background:transparent!important;
+      border-radius:0!important;
+      font-size:12px!important;
+    }
+    #eventForm .attendance-card + .attendance-card{
+      margin-top:4px!important;
+      padding-top:4px!important;
+      border-top:1px solid rgba(41,65,95,.45)!important;
+    }
+    #attendanceAutoNote{
+      min-height:0!important;
+      padding:0!important;
+      margin:0!important;
+    }
+    #eventForm .notify-help{
+      display:none!important;
+    }
+    @media(max-width:360px){
+      #categoryChoices.category-box{
+        grid-template-columns:repeat(2,minmax(0,1fr))!important;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -283,7 +400,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.33-coach-compact-form-v12.3</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.34-coach-compact-inputs-v12.3</div></div>
         <div class="actions">
           <button id="coachAttendanceBtn" class="btn">コーチ出席</button>
           <button id="newBtn" class="btn primary">＋追加</button>
@@ -380,14 +497,14 @@
         <div class="field"><label>予定名</label><input id="title"></div>
         <div class="field"><label>会場</label><input id="location"></div>
         <label class="category-choice" style="width:max-content"><input id="allDay" type="checkbox">終日</label>
-        <div id="timeFields" class="grid2"><div class="field"><label>開始</label><input id="startTime" type="time"></div><div class="field"><label>終了</label><input id="endTime" type="time"></div></div>
+        <div id="timeFields" class="grid2"><div class="field"><label>開始</label><input id="startTime" type="text" inputmode="numeric" maxlength="5" placeholder="00:00"></div><div class="field"><label>終了</label><input id="endTime" type="text" inputmode="numeric" maxlength="5" placeholder="00:00"></div></div>
         <div class="field"><label>詳細</label><textarea id="note"></textarea></div>
         <div class="attendance-card">
           <label class="category-choice" style="width:max-content"><input id="attendanceEnabled" type="checkbox">出欠回答を必須にする</label>
           <div id="attendanceAutoNote" class="status"></div>
           <div id="deadlineFields" class="grid2 hidden">
             <div class="field"><label>回答期限</label><input id="deadlineDays" type="number" min="0" max="60" value="2"></div>
-            <div class="field"><label>締切時刻</label><input id="deadlineTime" type="time" value="21:00"></div>
+            <div class="field"><label>締切</label><input id="deadlineTime" type="text" inputmode="numeric" maxlength="5" value="21:00" placeholder="21:00"></div>
           </div>
         </div>
 
@@ -2401,6 +2518,29 @@ function bindCalendarSwipe(){
     shiftMonth(dx<0?1:-1);
   },{passive:true});
 }
+function normalizeTimeTextValue(value,defaultValue){
+  const raw=String(value||'').replace(/[^0-9]/g,'').slice(0,4);
+  if(!raw)return defaultValue||'00:00';
+  const padded=raw.padStart(4,'0');
+  const hour=Math.min(23,Number(padded.slice(0,2))||0);
+  const minute=Math.min(59,Number(padded.slice(2,4))||0);
+  return String(hour).padStart(2,'0')+':'+String(minute).padStart(2,'0');
+}
+
+function bindCompactTimeInputs(){
+  ['startTime','endTime','deadlineTime'].forEach(id=>{
+    const input=$(id);
+    if(!input)return;
+
+    input.addEventListener('blur',()=>{
+      input.value=normalizeTimeTextValue(
+        input.value,
+        id==='deadlineTime'?'21:00':'00:00'
+      );
+    });
+  });
+}
+
 function logout(callApi=true){
   if(callApi&&state.token){
     jsonp('coach.app',{
@@ -2422,6 +2562,7 @@ function logout(callApi=true){
 }
 async function init(){
   buildSelectors();
+  bindCompactTimeInputs();
   bindCalendarSwipe();
   state.selectedDate=todayKey();
   el.apiUrl.value=state.apiUrl;
