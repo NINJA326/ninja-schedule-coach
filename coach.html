@@ -168,6 +168,105 @@
       }
     }
 
+  
+    /* STEP160-B / STEP161: compact modal form and stop horizontal shifting */
+    .modal,
+    .dialog,
+    .dialogbody,
+    #eventForm{
+      max-width:100%;
+      overflow-x:hidden;
+    }
+    #eventForm{
+      display:grid;
+      gap:7px;
+    }
+    #eventForm .grid2{
+      gap:7px;
+      max-width:100%;
+      min-width:0;
+      overflow:hidden;
+    }
+    #eventForm .field{
+      margin:2px 0;
+      gap:4px;
+      min-width:0;
+    }
+    #eventForm .field label{
+      font-size:11px;
+      line-height:1.25;
+    }
+    #eventForm .field input,
+    #eventForm .field select,
+    #eventForm .field textarea{
+      width:100%;
+      max-width:100%;
+      min-width:0;
+      min-height:36px;
+      padding:8px 10px;
+    }
+    #eventForm .field textarea{
+      min-height:56px;
+    }
+    #eventForm > .grid2{
+      width:172px;
+      max-width:100%;
+      grid-template-columns:minmax(0,1fr);
+    }
+    #date{
+      width:100%;
+      max-width:172px;
+    }
+    #timeFields,
+    #deadlineFields{
+      width:100%;
+      max-width:100%;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:7px;
+      overflow:hidden;
+    }
+    #timeFields input,
+    #deadlineFields input{
+      width:100%;
+      max-width:100%;
+      min-width:0;
+    }
+    #eventForm .attendance-card{
+      margin-top:6px;
+      padding:0;
+      border:0;
+      background:transparent;
+      border-radius:0;
+    }
+    #eventForm .attendance-card .category-choice{
+      width:max-content;
+      max-width:100%;
+      min-height:28px;
+      padding:2px 0;
+      border:0;
+      background:transparent;
+    }
+    #eventForm .attendance-card + .attendance-card{
+      margin-top:8px;
+      padding-top:6px;
+      border-top:1px solid rgba(41,65,95,.65);
+    }
+    #eventForm .notify-help{
+      display:none;
+    }
+    @media(max-width:380px){
+      #timeFields,
+      #deadlineFields{
+        gap:6px;
+      }
+      #eventForm .field input,
+      #eventForm .field select,
+      #eventForm .field textarea{
+        padding-left:8px;
+        padding-right:8px;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -184,7 +283,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.32-coach-form-fit-v12.3</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.33-coach-compact-form-v12.3</div></div>
         <div class="actions">
           <button id="coachAttendanceBtn" class="btn">コーチ出席</button>
           <button id="newBtn" class="btn primary">＋追加</button>
@@ -287,7 +386,7 @@
           <label class="category-choice" style="width:max-content"><input id="attendanceEnabled" type="checkbox">出欠回答を必須にする</label>
           <div id="attendanceAutoNote" class="status"></div>
           <div id="deadlineFields" class="grid2 hidden">
-            <div class="field"><label>回答期限（予定日の何日前）</label><input id="deadlineDays" type="number" min="0" max="60" value="2"></div>
+            <div class="field"><label>回答期限</label><input id="deadlineDays" type="number" min="0" max="60" value="2"></div>
             <div class="field"><label>締切時刻</label><input id="deadlineTime" type="time" value="21:00"></div>
           </div>
         </div>
@@ -297,7 +396,7 @@
             <input id="notify" type="checkbox">
             LINEで選手へ通知する
           </label>
-          <div class="status">
+          <div class="status notify-help">
             保存時に、選択したカテゴリーのLINE連携済み選手へ通知します。
           </div>
         </div>
