@@ -126,12 +126,42 @@
       .event .cats{font-size:10px}.event .kind{font-size:11px}.daynum{font-size:12px}.calendar{grid-template-rows:32px repeat(6,minmax(0,1fr))}
       .dialog{border-radius:18px;margin-bottom:3dvh}.modal.open{align-items:center}.category-box{grid-template-columns:repeat(6,minmax(0,1fr))}
     }
-  
+    
+    html,body{
+      max-width:100%;
+      overscroll-behavior-x:none;
+    }
+    .dialog,
+    .dialogbody,
+    #eventForm{
+      max-width:100%;
+      overflow-x:hidden;
+    }
+    input,select,textarea{
+      min-width:0;
+    }
+    #eventForm > .grid2{
+      grid-template-columns:minmax(138px,172px);
+      justify-content:start;
+    }
+    #eventForm > .grid2 .field{
+      width:100%;
+    }
+    #date{
+      width:100%;
+      max-width:172px;
+    }
+    .schedule-type-field{
+      display:none!important;
+    }
     @media(max-width:520px){
       #eventForm > .grid2,
       #timeFields,
       #deadlineFields{
-        grid-template-columns:1fr;
+        grid-template-columns:minmax(0,1fr);
+      }
+      #eventForm > .grid2{
+        max-width:172px;
       }
       #eventForm .field{
         margin:8px 0;
@@ -154,7 +184,7 @@
   <main id="appView" class="app hidden">
     <header class="top">
       <div class="toprow">
-        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.31-coach-ui-clean-v12.3</div></div>
+        <div class="brand"><h1>NINJA AIRS 練習予定表</h1><small>予定・出欠管理アプリ v4</small><div id="roleBadge" class="role-badge">コーチ</div><div class="build-badge">build v4.32-coach-form-fit-v12.3</div></div>
         <div class="actions">
           <button id="coachAttendanceBtn" class="btn">コーチ出席</button>
           <button id="newBtn" class="btn primary">＋追加</button>
@@ -243,8 +273,8 @@
       <form id="eventForm" class="dialogbody hidden">
         <input id="scheduleId" type="hidden"><input id="sourceRef" type="hidden">
         <div class="grid2">
-          <div class="field"><label>日付 *</label><input id="date" type="date" required></div>
-          <div class="field"><label>予定種類 *</label><select id="type"></select></div>
+          <div class="field date-field"><label>日付 *</label><input id="date" type="date" required></div>
+          <div class="field schedule-type-field" aria-hidden="true"><label>予定種類 *</label><select id="type" tabindex="-1"></select></div>
         </div>
         <div class="field"><label>対象カテゴリー *</label><div id="categoryChoices" class="category-box"></div></div>
         <div class="field"><label>予定カラー</label><div id="colorChoices" class="color-palette"></div></div>
@@ -604,8 +634,8 @@ function fillForm(e){
   $('title').value=e?.title||'';
   $('location').value=e?.location||'';
   $('allDay').checked=!!e?.allDay;
-  $('startTime').value=e?.startTime||'';
-  $('endTime').value=e?.endTime||'';
+  $('startTime').value=e?.startTime||'00:00';
+  $('endTime').value=e?.endTime||'00:00';
   $('note').value=e?.note||'';
   $('attendanceEnabled').checked=!!e?.attendanceEnabled;
   $('notify').checked=false;
